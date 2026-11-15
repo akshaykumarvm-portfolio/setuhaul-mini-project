@@ -1,0 +1,20 @@
+# Local run of the booking service in a container (optional; `uvicorn` directly works too).
+# Redis is Upstash (REDIS_URL in .env). Use `--profile local-redis` only to work offline.
+services:
+  booking:
+    build: { context: ., dockerfile: booking/Dockerfile }
+    ports: ["8000:8000"]
+    env_file: .env
+    environment:
+      SETUHAUL_DB_PATH: /data/setuhaul.db
+    volumes:
+      - booking-data:/data
+    restart: unless-stopped
+
+  redis:
+    profiles: ["local-redis"]
+    image: redis:7.4.1-alpine
+    ports: ["6379:6379"]
+
+volumes:
+  booking-data:
