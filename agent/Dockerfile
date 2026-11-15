@@ -6,4 +6,4 @@ COPY agent/requirements.txt agent/requirements.txt
 RUN pip install --no-cache-dir -r agent/requirements.txt
 COPY agent/ agent/
 EXPOSE 8080
-CMD ["python", "-m", "agent.app"]
+CMD ["python", "-m", "agent.app", "serve"]

@@ -10,6 +10,7 @@ from booking.common import audit, err, new_id, ok
 from booking.eta import effective_eta
 from booking.feasibility import LIVE_STATUSES, check_feasibility, shipment_flags
 from booking.holds import _end_hold
+from booking.threads import upsert_exception
 
 CAUSES = {"TRAFFIC", "BREAKDOWN", "WEATHER", "LATE_DEPARTURE", "LOADING_DELAY", "ROUTE_ISSUE", "OTHER"}
 
@@ -78,7 +79,7 @@ def driver_context(conn, driver_id: str) -> dict:
 
 def record_eta(conn, shipment_id: str, eta_lo: str, eta_hi: str, confidence: str, *, cause: str | None = None,
                cause_fixed: bool | None = None, source_text: str = "", driver_id: str | None = None,
-               actor: str = "agent") -> dict:
+               thread_id: str | None = None, actor: str = "agent") -> dict:
     """Store a driver ETA as a window, then re-check the current appointment and any live hold."""
     if confidence not in ("LOW", "MEDIUM", "HIGH"):
         return err("BAD_CONFIDENCE", confidence)
@@ -105,6 +106,10 @@ def record_eta(conn, shipment_id: str, eta_lo: str, eta_hi: str, confidence: str
                       None if cause_fixed is None else int(cause_fixed), source_text[:500] or None))
         conn.execute("UPDATE shipments SET latest_eta_ts = %s, updated_at = %s WHERE shipment_id = %s",
                      (fmt_ts(hi), fmt_ts(now), shipment_id))
+        planned = clock.parse_ts(sh["original_eta_ts"])
+        delay = max(int((hi - planned).total_seconds() // 60), 0)
+        exc_id = upsert_exception(conn, now, shipment_id, sh["driver_id"], thread_id, cause=cause, eta_hi=fmt_ts(hi),
+                                  delay_min=delay, low_confidence=confidence == "LOW", text=source_text)
         cur = current_appointment(conn, shipment_id)
         fits = None
         if cur:
@@ -122,7 +127,7 @@ def record_eta(conn, shipment_id: str, eta_lo: str, eta_hi: str, confidence: str
                 _end_hold(conn, hold["hold_id"], "RELEASED")
                 released = hold["hold_id"]
         result = ok(eta_update_id=eid, eta={"eta_lo": fmt_ts(lo), "eta_hi": fmt_ts(hi), "confidence": confidence},
-                    current_appointment=fits, released_hold=released,
+                    current_appointment=fits, released_hold=released, exception_id=exc_id or None,
                     needs_clarification=confidence == "LOW")
         audit(conn, now, actor, "RECORD_ETA", eid, None, result)
     return result

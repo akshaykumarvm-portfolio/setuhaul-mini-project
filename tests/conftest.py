@@ -13,6 +13,7 @@ from psycopg import sql
 from psycopg.conninfo import make_conninfo
 
 os.environ["SWEEPER_ENABLED"] = "0"  # tests drive the sweeper explicitly
+os.environ["LANGSMITH_TRACING"] = "false"   # keep test traffic out of the LangSmith project
 os.environ["REDIS_URL"] = ""        # never publish test traffic to the shared Upstash instance
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))

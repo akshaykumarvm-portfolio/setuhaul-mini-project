@@ -79,9 +79,9 @@ def test_eta_plus_gate_to_dock(frozen):
 
 
 def test_low_confidence_range_plans_on_late_edge(frozen):
-    # A12: SHP1017 "between 12:30 and 13:00" -> window 12:30-13:00, LOW, plan on 13:00 + 15
+    # A12: SHP1017 "between 12:30 and 13:00" -> window 12:30-13:00, MEDIUM (bounded), plan on 13:00 + 15
     st = load_state(frozen, "SHP1017", clock.now(frozen))
-    assert st.eta.confidence == "LOW"
+    assert st.eta.confidence == "MEDIUM"
     assert clock.fmt_ts(st.eta.eta_lo)[11:16] == "12:30" and clock.fmt_ts(st.eta.eta_hi)[11:16] == "13:00"
     assert clock.fmt_ts(st.earliest_start)[11:16] == "13:15"
 

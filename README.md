@@ -9,8 +9,8 @@ Driver delay conversations + dock re-slotting without infeasible or conflicting 
 | --- | --- | --- |
 | 1 | Skeleton, Postgres schema + snapshot loader, migrations, simulated clock, pinned versions | done; **deployed** (RDS + S3), see [infra/README.md](infra/README.md) |
 | 2 | Booking service: feasibility, quotes, holds, requests, confirm/reject, escalate, sweeper, integrity test | done; **deployed** on ECS/EC2; test output in [docs/evidence/phase2_test_output.txt](docs/evidence/phase2_test_output.txt) |
-| 3 | LangChain agent, intake, middleware, Redis checkpointer, LangSmith, AgentCore entrypoint | next |
-| 4 | React driver chat + ops console, Cognito | |
+| 3 | LangChain agent, intake, middleware, Redis checkpointer, LangSmith, AgentCore entrypoint | done (local); AgentCore deploy with Cognito in phase 4; output in [docs/evidence/phase3_test_output.txt](docs/evidence/phase3_test_output.txt) |
+| 4 | React driver chat + ops console, Cognito | next |
 | 5 | CP-SAT scheduler vs dispatch-rule baseline | |
 | 6 | Scripted scenario run, brief steps 1-7 | |
 
@@ -28,10 +28,48 @@ Driver delay conversations + dock re-slotting without infeasible or conflicting 
 | Holds need only feasibility | Holds and requests also refuse a **LOW-confidence ETA** (`ETA_UNCONFIRMED`) and **contradictory driver data** (A8) | Code, not only the agent prompt, stops a promise built on a vague ETA or a driver on two trucks |
 | 10 concurrent `request_booking` for one slot (Decision 13) | Race tested at three layers: 10 clients hold one slot; 10 clients request one hold; 10 writers bypass app checks and insert directly | Holds are exclusive per slot, so 10 requests for one slot can only arrive through one hold, or through a bug |
 | Surge-mode batching (Decision 7) | Not in phase 2: first valid commit wins | Built with the phase 6 competing-trucks scenario |
+| A range ETA ("12:30-13:00") is LOW | A stated range is **MEDIUM**, planned on its late edge; LOW is kept for unbounded phrases ("late by an hour", a repair time) | LOW blocks holds, so a driver who gives an honest range could never book |
+| `langgraph-checkpoint-redis` | Small custom `RedisSaver` on plain keys (`agent/checkpointer.py`) | Upstash has no RediSearch/RedisJSON modules |
+| Agent writes the transcript | Intake writes it through the booking API (`/threads/...`) | The agent never touches the database |
 
 The 18 supplied tables keep every column exactly as supplied (timestamps stay `TEXT`, `+05:30`);
 the database uses the `C` collation so text timestamps sort exactly in time order. The only
 added column is `appointment_slots.version`.
+
+## Conversation agent (phase 3)
+
+**The LLM talks, code decides.** One driver message runs through:
+
+1. **Intake (fixed workflow)**: dedupe on the channel message id *and* driver + text + 2-minute bucket (THR009 repeats
+   THR001 under a different id), rate limit, open/append the thread and transcript in the booking service.
+2. **Extraction**: the model fills a `DriverMessage`; **code** turns phrases into an ETA window and decides confidence
+   (stated time = HIGH, stated range = MEDIUM on the late edge, "late by an hour" or a repair time = LOW, ask once).
+   ETA facts said before the load is known carry forward until it is.
+3. **Agent loop** (`create_agent`, model via OpenRouter, Redis checkpointer on Upstash) with these middleware:
+
+| Middleware | What code enforces |
+| --- | --- |
+| `CaseContextPrompt` | Booking-service case state (stage, current/pending slot, hold, ETA) injected before every model call |
+| `WriteGuard` | No shipment tools before a load is linked; no hold/request on a LOW ETA |
+| `ReplyPostCheck` | A reply claiming "booked/confirmed" when the stage isn't CONFIRMED is replaced with a true one; a dock no tool returned is blocked; a promised hand-off is created if the model forgot |
+| `TurnOutcome` | Two failed clarifications -> coordinator hand-off; a run cut short by limits -> fixed hand-off reply |
+| Tool code | No feasible slot -> the tool raises the hand-off itself (Decision 10); the model may not record an ETA with more confidence than code resolved |
+| Built-ins | Model retry + fallback model, tool/model call limits, summarisation for long threads |
+
+Identity: `driver_id`/`thread_id` live in the runtime context (from the verified session), every booking call carries
+`X-Driver-Id`, and the booking service refuses another driver's loads (`NOT_YOURS`). LangSmith: one `driver_message`
+trace per message with extraction, middleware, model and tool spans nested, tagged with thread, shipment and scenario.
+
+```powershell
+uvicorn booking.api:app --port 8000                      # booking service (terminal 1)
+python -m agent.app chat --driver DRV013                  # chat as a driver (terminal 2)
+python -m agent.app say --driver DRV004 "I will be late by 45 minutes."
+python -m agent.app serve                                 # AgentCore contract on :8080 (/invocations, /ping)
+```
+
+Seeded drivers worth trying: `DRV013` (vague delay, THR003), `DRV004` (two loads, THR010), `DRV006` (SHP1006 late,
+THR001), `DRV008` (cancelled load, THR012), `DRV015` with the clock at 16:30 (no feasible reefer slot, THR005),
+`DRV007` (on two trucks at once: hand-off).
 
 ## Booking API (phase 2)
 
@@ -116,6 +154,7 @@ Python **3.12**, PostgreSQL **16**.
 | langgraph | 1.2.22 | agent |
 | langgraph-checkpoint | 4.3.2 | agent |
 | langsmith | 0.14.17 | agent, evals |
+| fakeredis | 2.40.0 | tests (no Upstash traffic) |
 | bedrock-agentcore | 1.26.0 | agent (Runtime entrypoint) |
 | pytest | 9.2.0 | tests |
 | Redis server | Upstash (managed, TLS) | cache, dedupe, checkpoints, pub/sub |

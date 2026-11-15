@@ -3,7 +3,8 @@ from __future__ import annotations
 
 import json
 import logging
-import uuid
+import secrets
+import time
 from datetime import datetime
 
 from booking import cache
@@ -12,8 +13,14 @@ from booking.clock import fmt_ts
 log = logging.getLogger(__name__)
 
 
+_last_ms = [0]
+
+
 def new_id(prefix: str) -> str:
-    return f"{prefix}-{uuid.uuid4().hex[:10].upper()}"
+    """Time-sortable id: 11 hex digits of wall-clock milliseconds + 4 random hex digits."""
+    ms = max(int(time.time() * 1000), _last_ms[0] + 1)   # strictly increasing within this process
+    _last_ms[0] = ms
+    return f"{prefix}-{ms:011X}{secrets.token_hex(2).upper()}"
 
 
 def ok(**data) -> dict:

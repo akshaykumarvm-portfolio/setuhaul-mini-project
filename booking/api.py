@@ -17,7 +17,7 @@ from fastapi import Depends, FastAPI, Header, HTTPException, Request
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 
-from booking import bookings, cache, clock, handoffs, holds, quotes, service, sweeper
+from booking import bookings, cache, clock, handoffs, holds, quotes, service, sweeper, threads
 from booking.config import get_settings
 from booking.db import connect, write_tx
 from booking.db.migrate import migrate
@@ -61,6 +61,38 @@ def respond(result: dict) -> JSONResponse:
 
 def _ts(v: str | None):
     return clock.parse_ts(v) if v else None
+
+
+# Driver scoping: when a request carries X-Driver-Id (set by the agent from the verified
+# session, never by the model), it may only touch that driver's shipments. Phase 4 replaces
+# the trusted header with a validated Cognito token.
+DriverId = Header(None, alias="X-Driver-Id")
+
+
+def _owner_of(conn, *, shipment_id=None, quote_id=None, hold_id=None, appointment_id=None) -> str | None:
+    if quote_id:
+        r = conn.execute("SELECT shipment_id FROM slot_quotes WHERE quote_id = %s", (quote_id,)).fetchone()
+        shipment_id = r and r["shipment_id"]
+    if hold_id:
+        r = conn.execute("SELECT shipment_id FROM slot_holds WHERE hold_id = %s", (hold_id,)).fetchone()
+        shipment_id = r and r["shipment_id"]
+    if appointment_id:
+        r = conn.execute("SELECT shipment_id FROM appointments WHERE appointment_id = %s", (appointment_id,)).fetchone()
+        shipment_id = r and r["shipment_id"]
+    if not shipment_id:
+        return None
+    r = conn.execute("SELECT driver_id FROM shipments WHERE shipment_id = %s", (shipment_id,)).fetchone()
+    return r and r["driver_id"]
+
+
+def forbid(conn, driver_id: str | None, **ids) -> JSONResponse | None:
+    if driver_id is None:
+        return None
+    owner = _owner_of(conn, **ids)
+    if owner is not None and owner != driver_id:
+        return JSONResponse({"ok": False, "code": "NOT_YOURS", "message": "That load is not assigned to you."},
+                            status_code=403)
+    return None
 
 
 # ---------- health and simulated clock ----------
@@ -111,13 +143,15 @@ def run_sweep(conn=Depends(db)):
 # ---------- reads ----------
 
 @app.get("/drivers/{driver_id}/context")
-def driver_context(driver_id: str, conn=Depends(db)):
+def driver_context(driver_id: str, conn=Depends(db), caller: str | None = DriverId):
+    if caller and caller != driver_id:
+        return JSONResponse({"ok": False, "code": "NOT_YOURS"}, status_code=403)
     return respond(service.driver_context(conn, driver_id))
 
 
 @app.get("/shipments/{shipment_id}/status")
-def shipment_status(shipment_id: str, conn=Depends(db)):
-    return respond(service.shipment_status(conn, shipment_id))
+def shipment_status(shipment_id: str, conn=Depends(db), driver_id: str | None = DriverId):
+    return forbid(conn, driver_id, shipment_id=shipment_id) or respond(service.shipment_status(conn, shipment_id))
 
 
 @app.get("/shipments/{shipment_id}/feasibility")
@@ -178,7 +212,9 @@ class QuoteReq(BaseModel):
 
 
 @app.post("/quotes")
-def create_quote(body: QuoteReq, conn=Depends(db)):
+def create_quote(body: QuoteReq, conn=Depends(db), driver_id: str | None = DriverId):
+    if denied := forbid(conn, driver_id, shipment_id=body.shipment_id):
+        return denied
     with write_tx(conn):
         r = quotes.build_quote(conn, body.shipment_id, clock.now(conn), thread_id=body.thread_id,
                                latest_finish=_ts(body.latest_finish), after=_ts(body.after))
@@ -191,13 +227,14 @@ class HoldReq(BaseModel):
 
 
 @app.post("/holds")
-def create_hold(body: HoldReq, conn=Depends(db), idempotency_key: str | None = Header(None)):
-    return respond(holds.hold_option(conn, body.quote_id, body.option_no, idem_key=idempotency_key))
+def create_hold(body: HoldReq, conn=Depends(db), idempotency_key: str | None = Header(None),
+                driver_id: str | None = DriverId):
+    return forbid(conn, driver_id, quote_id=body.quote_id) or respond(holds.hold_option(conn, body.quote_id, body.option_no, idem_key=idempotency_key))
 
 
 @app.delete("/holds/{hold_id}")
-def delete_hold(hold_id: str, conn=Depends(db)):
-    return respond(holds.release_hold(conn, hold_id))
+def delete_hold(hold_id: str, conn=Depends(db), driver_id: str | None = DriverId):
+    return forbid(conn, driver_id, hold_id=hold_id) or respond(holds.release_hold(conn, hold_id))
 
 
 class BookingReq(BaseModel):
@@ -205,8 +242,9 @@ class BookingReq(BaseModel):
 
 
 @app.post("/bookings")
-def create_booking(body: BookingReq, conn=Depends(db), idempotency_key: str | None = Header(None)):
-    return respond(bookings.request_booking(conn, body.hold_id, idem_key=idempotency_key))
+def create_booking(body: BookingReq, conn=Depends(db), idempotency_key: str | None = Header(None),
+                   driver_id: str | None = DriverId):
+    return forbid(conn, driver_id, hold_id=body.hold_id) or respond(bookings.request_booking(conn, body.hold_id, idem_key=idempotency_key))
 
 
 class ConfirmReq(BaseModel):
@@ -238,12 +276,16 @@ class EtaReq(BaseModel):
     cause: str | None = None
     cause_fixed: bool | None = None
     source_text: str = ""
+    thread_id: str | None = None
 
 
 @app.post("/eta")
-def post_eta(body: EtaReq, conn=Depends(db)):
+def post_eta(body: EtaReq, conn=Depends(db), driver_id: str | None = DriverId):
+    if denied := forbid(conn, driver_id, shipment_id=body.shipment_id):
+        return denied
     return respond(service.record_eta(conn, body.shipment_id, body.eta_lo, body.eta_hi, body.confidence,
-                                      cause=body.cause, cause_fixed=body.cause_fixed, source_text=body.source_text))
+                                      cause=body.cause, cause_fixed=body.cause_fixed, source_text=body.source_text,
+                                      driver_id=driver_id, thread_id=body.thread_id))
 
 
 class EscalateReq(BaseModel):
@@ -255,7 +297,9 @@ class EscalateReq(BaseModel):
 
 
 @app.post("/handoffs")
-def post_handoff(body: EscalateReq, conn=Depends(db)):
+def post_handoff(body: EscalateReq, conn=Depends(db), driver_id: str | None = DriverId):
+    if denied := forbid(conn, driver_id, shipment_id=body.shipment_id):
+        return denied
     return respond(handoffs.escalate(conn, body.shipment_id, body.reason_code, body.summary, thread_id=body.thread_id,
                                      latest_finish=_ts(body.latest_finish)))
 
@@ -268,3 +312,54 @@ class CloseReq(BaseModel):
 @app.post("/handoffs/{handoff_id}/close")
 def close(handoff_id: str, body: CloseReq, conn=Depends(db)):
     return respond(handoffs.close_handoff(conn, handoff_id, body.resolution, actor=body.actor))
+
+
+# ---------- conversation records (agent intake) ----------
+
+class ThreadReq(BaseModel):
+    driver_id: str
+    thread_id: str | None = None
+    intent: str = "UNKNOWN"
+
+
+@app.post("/threads")
+def post_thread(body: ThreadReq, conn=Depends(db), caller: str | None = DriverId):
+    if caller and caller != body.driver_id:
+        return JSONResponse({"ok": False, "code": "NOT_YOURS"}, status_code=403)
+    return respond(threads.open_thread(conn, body.driver_id, body.thread_id, body.intent))
+
+
+class MessageReq(BaseModel):
+    sender_type: str = Field(pattern="^(DRIVER|AGENT|OPERATIONS|WAREHOUSE|SYSTEM)$")
+    text: str
+    external_message_id: str | None = None
+    sender_reference: str | None = None
+    parsed_intent: str | None = None
+    extracted_eta_ts: str | None = None
+    requires_human_review: bool = False
+
+
+@app.post("/threads/{thread_id}/messages")
+def post_message(thread_id: str, body: MessageReq, conn=Depends(db)):
+    return respond(threads.add_message(conn, thread_id, body.sender_type, body.text,
+                                       external_message_id=body.external_message_id,
+                                       sender_reference=body.sender_reference, parsed_intent=body.parsed_intent,
+                                       extracted_eta_ts=body.extracted_eta_ts,
+                                       requires_human_review=body.requires_human_review))
+
+
+@app.get("/threads/{thread_id}/messages")
+def get_messages(thread_id: str, conn=Depends(db)):
+    return {"messages": threads.transcript(conn, thread_id)}
+
+
+class LinkReq(BaseModel):
+    driver_id: str
+    shipment_id: str
+
+
+@app.post("/threads/{thread_id}/link")
+def post_link(thread_id: str, body: LinkReq, conn=Depends(db), caller: str | None = DriverId):
+    if caller and caller != body.driver_id:
+        return JSONResponse({"ok": False, "code": "NOT_YOURS"}, status_code=403)
+    return respond(threads.link_shipment(conn, thread_id, body.driver_id, body.shipment_id))

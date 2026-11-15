@@ -149,6 +149,6 @@ def test_health_endpoint(db_url, monkeypatch):
         body = client.get("/health").json()
         assert body["status"] == "ok"
         assert body["migrations"] == ["000_snapshot", "001_schema_additions.sql", "002_sim_clock.sql",
-                                      "003_eta_windows_and_claims.sql"]
+                                      "003_eta_windows_and_claims.sql", "004_chat_dedupe.sql"]
         r = client.post("/admin/clock", json={"sim_ts": "2026-08-04T10:00:00+05:30", "rate": 0}).json()
         assert r["sim_now"] == "2026-08-04T10:00:00+05:30"

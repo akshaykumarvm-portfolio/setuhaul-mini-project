@@ -75,8 +75,8 @@ def effective_eta(conn, shipment_id: str, now: datetime | None = None) -> EtaWin
                                  r["eta_update_id"], r["note"])
             rng = _range_from_note(r["note"], declared)
             lo, hi = rng if rng else (declared, declared)
-            # A stated range is honest uncertainty: never better than LOW-but-bounded.
-            conf = "LOW" if rng else r["confidence_code"]
+            # A stated range is bounded: plan on its late edge at MEDIUM (LOW is for unbounded phrases).
+            conf = "MEDIUM" if rng else r["confidence_code"]
             return EtaWindow(lo, hi, conf, source, r["eta_update_id"], r["note"])
 
     s = conn.execute("SELECT original_eta_ts, latest_eta_ts FROM shipments WHERE shipment_id = %s",
