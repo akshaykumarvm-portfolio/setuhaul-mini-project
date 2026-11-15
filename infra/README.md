@@ -13,7 +13,13 @@
 | Secrets | SSM Parameter Store (SecureString) | Free tier, instead of Secrets Manager. `DATABASE_URL`, `OPEN_ROUTER_API_KEY`, `LANGSMITH_API_KEY`, `REDIS_URL`. |
 | Cost guard | AWS Budgets | `setuhaul-20usd` **created**: $20/month, counts usage before credits; email at 50/80/100% actual and 100% forecast. |
 
-## Current blocker (2026-11-15)
+## Status update (2026-11-15, later)
+
+The account was upgraded to the **Paid plan** (`get-account-plan-state` now returns PAID / ACTIVE).
+The CLI session issued before the upgrade is still denied by the same policies; a fresh
+`aws login` is needed before provisioning can start.
+
+## Original blocker (2026-11-15)
 
 Account `611597330436` (Free plan, $99.98 credits) is a member of AWS Organization
 `o-mvhgz7rhpw` (management account `688508115450`). Its service control policies

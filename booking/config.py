@@ -32,7 +32,7 @@ def get_settings() -> Settings:
         database_url=os.getenv("DATABASE_URL") or "postgresql://postgres@localhost:5432/setuhaul",
         snapshot_uri=os.getenv("SNAPSHOT_URI") or str(REPO_ROOT / "data" / "setuhaul_schema_and_seed.sql"),
         redis_url=os.getenv("REDIS_URL") or None,
-        sim_start=os.getenv("SIM_START") or "2026-08-04T09:30:00+05:30",
+        sim_start=os.getenv("SIM_START") or "2026-08-04T10:00:00+05:30",
         sim_rate=float(os.getenv("SIM_RATE") or 1.0),
         aws_region=os.getenv("AWS_REGION") or "us-east-1",
     )
