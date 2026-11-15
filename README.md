@@ -7,8 +7,8 @@ Driver delay conversations + dock re-slotting without infeasible or conflicting 
 
 | Phase | Scope | State |
 | --- | --- | --- |
-| 1 | Skeleton, Postgres schema + snapshot loader, migrations, simulated clock, pinned versions | done (local); AWS provisioning pending, see [infra/README.md](infra/README.md) |
-| 2 | Booking service: feasibility, quotes, holds, requests, confirm/reject, escalate, sweeper, integrity test | done (local); test output in [docs/evidence/phase2_test_output.txt](docs/evidence/phase2_test_output.txt) |
+| 1 | Skeleton, Postgres schema + snapshot loader, migrations, simulated clock, pinned versions | done; **deployed** (RDS + S3), see [infra/README.md](infra/README.md) |
+| 2 | Booking service: feasibility, quotes, holds, requests, confirm/reject, escalate, sweeper, integrity test | done; **deployed** on ECS/EC2; test output in [docs/evidence/phase2_test_output.txt](docs/evidence/phase2_test_output.txt) |
 | 3 | LangChain agent, intake, middleware, Redis checkpointer, LangSmith, AgentCore entrypoint | next |
 | 4 | React driver chat + ops console, Cognito | |
 | 5 | CP-SAT scheduler vs dispatch-rule baseline | |
