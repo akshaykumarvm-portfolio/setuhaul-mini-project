@@ -12,14 +12,13 @@ from fastapi import Depends, FastAPI, HTTPException
 from pydantic import BaseModel
 
 from booking import cache, clock
-from booking.config import get_settings
-from booking.db import begin_immediate, connect
+from booking.db import connect, write_tx
 from booking.db.migrate import migrate
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    migrate()  # idempotent: copy snapshot if missing, apply pending migrations
+    migrate()  # idempotent: create DB + load snapshot once, apply pending migrations
     yield
 
 
@@ -36,11 +35,10 @@ def db() -> Iterator:
 
 @app.get("/health")
 def health(conn=Depends(db)):
-    s = get_settings()
     return {
         "status": "ok",
-        "db_path": str(s.db_path),
-        "migrations": [r[0] for r in conn.execute("SELECT name FROM schema_migrations ORDER BY name")],
+        "database": conn.info.dbname,
+        "migrations": [r["name"] for r in conn.execute("SELECT name FROM schema_migrations ORDER BY name")],
         "sim_now": clock.fmt_ts(clock.now(conn)),
         "redis": cache.ping(),
     }
@@ -59,7 +57,7 @@ def get_clock(conn=Depends(db)):
 
 @app.post("/admin/clock")
 def update_clock(body: ClockUpdate, conn=Depends(db)):
-    with begin_immediate(conn):
+    with write_tx(conn):
         if body.sim_ts:
             t = clock.set_clock(conn, body.sim_ts, body.rate)
         elif body.advance_min is not None:

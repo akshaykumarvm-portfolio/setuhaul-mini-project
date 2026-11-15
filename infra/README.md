@@ -1,10 +1,27 @@
-# Deployment notes (filled in during phases 3-4)
+# AWS deployment (us-east-1, free tier + AgentCore, $20/month budget)
 
-| Piece | Target | Notes |
+| Piece | Service | Free-tier sizing / notes |
 | --- | --- | --- |
-| Booking service | ECS on EC2, 1 container instance (t3.small, x86_64) | Service `desiredCount=1`, deployment `minimumHealthyPercent=0`, `maximumPercent=100` so two writers never overlap during a deploy. `/data` bind-mounted from the instance's EBS volume; nightly `sqlite3 .backup` to S3. ALB with HTTPS in front. |
-| Agent | Bedrock AgentCore Runtime (arm64 container) | Built with AWS CodeBuild via the AgentCore starter toolkit, so no local Docker is required. JWT inbound auth against the Cognito pool. |
-| Redis | Upstash (existing) | `rediss://` TLS. Plain keys only: Upstash has no RediSearch, so the LangGraph checkpointer is a small custom saver on GET/SET. |
-| Web | S3 + CloudFront | `npm run build` locally or in CodeBuild. |
+| System of record | RDS for PostgreSQL 16 | `db.t4g.micro`, 20 GB gp3, single-AZ, no public access; SG allows 5432 only from the ECS instance SG. DB created with `LC_COLLATE 'C'` by `booking.db.migrate`. |
+| Supplied data | S3 (private bucket) | `s3://setuhaul-data-<account>/snapshot/2026-08-04/`; block public access, versioning on. The booking task reads the seed SQL into memory via its task role (`s3:GetObject` on that prefix only). |
+| Booking service | ECS on EC2 | 1 × `t3.micro` container instance; service `desiredCount=1`, `minimumHealthyPercent=0`, `maximumPercent=100`. **No volumes**: the container is stateless. |
+| Container images | ECR | Booking + agent repos. Pushed from CodeBuild (no local Docker). |
+| Agent | Bedrock AgentCore Runtime | arm64 container; JWT inbound auth against Cognito. Pay-per-use (not free tier), covered by the budget. |
+| Redis | Upstash (existing) | `rediss://` TLS. Plain keys only (no RediSearch): custom LangGraph checkpointer. |
+| Web | S3 + CloudFront | Static Vite build. |
 | Identity | Cognito user pool | Groups `driver`, `coordinator`, `planner`; custom attribute `driver_id`. |
-| Secrets | AWS Secrets Manager | OPEN_ROUTER_API_KEY, LANGSMITH_API_KEY, REDIS_URL. |
+| Secrets | SSM Parameter Store (SecureString) | Free tier, instead of Secrets Manager. `DATABASE_URL`, `OPEN_ROUTER_API_KEY`, `LANGSMITH_API_KEY`, `REDIS_URL`. |
+| Cost guard | AWS Budgets | `setuhaul-20usd` **created**: $20/month, counts usage before credits; email at 50/80/100% actual and 100% forecast. |
+
+## Current blocker (2026-11-15)
+
+Account `611597330436` (Free plan, $99.98 credits) is a member of AWS Organization
+`o-mvhgz7rhpw` (management account `688508115450`). Its service control policies
+explicitly deny, among others: `s3:CreateBucket`, `ec2:*Describe*`, `rds:*`, `ecs:*`,
+`ecr:*`, `cognito-idp:*`, `bedrock-agentcore:*`, `ssm:*`, `secretsmanager:*`,
+`codebuild:*`, `lambda:*`, `iam:ListAccountAliases`. Allowed so far: Budgets,
+CloudFront (read), CloudWatch Logs (read), IAM (read), Lightsail (read), S3 (list).
+
+The CLI session was a role (`AccountFullAccessRole`) rather than the account's root or
+an IAM user, which is why these organization policies apply. Nothing beyond the budget
+has been created.

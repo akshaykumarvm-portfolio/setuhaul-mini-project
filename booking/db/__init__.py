@@ -1,40 +1,36 @@
-"""SQLite access for the booking service (the sole writer).
+"""Postgres access for the booking service (the only service that writes capacity).
 
-Connections run in autocommit mode; every write goes through `begin_immediate()`,
-which takes SQLite's write lock up front so a second writer waits (busy timeout)
-and then sees the first writer's rows. Feasibility is re-checked inside that block.
+Concurrency model (replaces the spec's SQLite BEGIN IMMEDIATE):
+  * every write runs in one transaction via `write_tx()`;
+  * inside it, the rows being claimed are locked with SELECT ... FOR UPDATE
+    (slots in slot_id order, so two writers never deadlock), feasibility is
+    re-checked under that lock, then the row is inserted;
+  * the partial unique indexes reject any second active claim even if
+    application code has a bug (IntegrityError -> SLOT_TAKEN).
+A waiting writer gives up after `lock_timeout` and the API returns BUSY.
 """
 from __future__ import annotations
 
-import sqlite3
 from contextlib import contextmanager
-from pathlib import Path
 from typing import Iterator
+
+import psycopg
+from psycopg.rows import dict_row
 
 from booking.config import get_settings
 
 
-def connect(db_path: Path | str | None = None, *, busy_timeout_ms: int | None = None) -> sqlite3.Connection:
+def connect(url: str | None = None, *, autocommit: bool = True) -> psycopg.Connection:
     s = get_settings()
-    path = Path(db_path) if db_path else s.db_path
-    conn = sqlite3.connect(path, isolation_level=None, check_same_thread=False,
-                           timeout=(busy_timeout_ms or s.busy_timeout_ms) / 1000)
-    conn.row_factory = sqlite3.Row
-    conn.execute("PRAGMA foreign_keys = ON")
-    conn.execute("PRAGMA journal_mode = WAL")
-    conn.execute(f"PRAGMA busy_timeout = {busy_timeout_ms or s.busy_timeout_ms}")
-    conn.execute("PRAGMA synchronous = NORMAL")
+    conn = psycopg.connect(url or s.database_url, autocommit=autocommit, row_factory=dict_row,
+                           connect_timeout=10)
+    conn.execute(f"SET lock_timeout = {int(s.lock_timeout_ms)}")
+    conn.execute("SET TIME ZONE 'Asia/Kolkata'")
     return conn
 
 
 @contextmanager
-def begin_immediate(conn: sqlite3.Connection) -> Iterator[sqlite3.Connection]:
+def write_tx(conn: psycopg.Connection) -> Iterator[psycopg.Connection]:
     """One write transaction. Commits on success, rolls back on any exception."""
-    conn.execute("BEGIN IMMEDIATE")
-    try:
+    with conn.transaction():
         yield conn
-    except BaseException:
-        conn.execute("ROLLBACK")
-        raise
-    else:
-        conn.execute("COMMIT")

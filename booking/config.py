@@ -11,19 +11,15 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 load_dotenv(REPO_ROOT / ".env")
 
 
-def _default_db_path() -> Path:
-    # Keep the working copy out of OneDrive: sync clients lock files and break WAL.
-    return Path.home() / ".setuhaul" / "setuhaul.db"
-
-
 @dataclass(frozen=True)
 class Settings:
-    source_db: Path
-    db_path: Path
+    database_url: str          # the SetuHaul database (system of record)
+    snapshot_uri: str          # s3://bucket/key.sql or a local path to the supplied seed SQL
     redis_url: str | None
     sim_start: str
     sim_rate: float
-    busy_timeout_ms: int = 5000
+    aws_region: str
+    lock_timeout_ms: int = 5000
     hold_minutes: int = 5
     gate_to_dock_min: int = 15
     pending_expiry_min: int = 15
@@ -32,13 +28,11 @@ class Settings:
 
 
 def get_settings() -> Settings:
-    src = os.getenv("SETUHAUL_SOURCE_DB") or "data/setuhaul_freight_operations.db"
-    src_path = Path(src) if Path(src).is_absolute() else REPO_ROOT / src
-    db = os.getenv("SETUHAUL_DB_PATH")
     return Settings(
-        source_db=src_path,
-        db_path=Path(db) if db else _default_db_path(),
+        database_url=os.getenv("DATABASE_URL") or "postgresql://postgres@localhost:5432/setuhaul",
+        snapshot_uri=os.getenv("SNAPSHOT_URI") or str(REPO_ROOT / "data" / "setuhaul_schema_and_seed.sql"),
         redis_url=os.getenv("REDIS_URL") or None,
         sim_start=os.getenv("SIM_START") or "2026-08-04T09:30:00+05:30",
         sim_rate=float(os.getenv("SIM_RATE") or 1.0),
+        aws_region=os.getenv("AWS_REGION") or "us-east-1",
     )

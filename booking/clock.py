@@ -1,18 +1,18 @@
 """Simulated clock (A15: the snapshot has no single 'now').
 
-sim_now = anchor_sim + (real_now - anchor_real) * rate
-
-The anchor lives in the `sim_clock` table so every process (API workers, sweeper,
-test clients) agrees on the same time. Every tool takes `now` from here; nothing in
-the booking service calls datetime.now() for business logic.
+sim_now = anchor_sim + (real_now - anchor_real) * rate, evaluated inside Postgres
+with clock_timestamp(), so the API, the sweeper and test clients all agree.
+Every tool takes `now` from here; business logic never calls datetime.now().
 """
 from __future__ import annotations
 
-import sqlite3
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 
+import psycopg
+
 IST = ZoneInfo("Asia/Kolkata")
+_NOW_SQL = "SELECT anchor_sim + (clock_timestamp() - anchor_real) * rate AS t FROM sim_clock WHERE id = 1"
 
 
 def parse_ts(ts: str) -> datetime:
@@ -22,40 +22,32 @@ def parse_ts(ts: str) -> datetime:
 
 
 def fmt_ts(dt: datetime) -> str:
-    """Format in the DB's style: 2026-08-04T09:30:00+05:30."""
+    """Format like the supplied data: 2026-08-04T09:30:00+05:30."""
     return dt.astimezone(IST).replace(microsecond=0).isoformat()
 
 
-def _real_now() -> datetime:
-    return datetime.now(timezone.utc)
+def ensure_clock(conn: psycopg.Connection, sim_start: str, rate: float = 1.0) -> None:
+    conn.execute("INSERT INTO sim_clock (id, anchor_sim, rate) VALUES (1, %s, %s) ON CONFLICT (id) DO NOTHING",
+                 (parse_ts(sim_start), rate))
 
 
-def ensure_clock(conn: sqlite3.Connection, sim_start: str, rate: float = 1.0) -> None:
-    conn.execute(
-        "INSERT OR IGNORE INTO sim_clock (id, anchor_sim, anchor_real, rate) VALUES (1, ?, ?, ?)",
-        (fmt_ts(parse_ts(sim_start)), _real_now().isoformat(), rate),
-    )
-
-
-def now(conn: sqlite3.Connection) -> datetime:
-    row = conn.execute("SELECT anchor_sim, anchor_real, rate FROM sim_clock WHERE id = 1").fetchone()
+def now(conn: psycopg.Connection) -> datetime:
+    row = conn.execute(_NOW_SQL).fetchone()
     if row is None:
         raise RuntimeError("sim_clock not initialised; run `python -m booking.db.migrate`")
-    anchor_sim, anchor_real, rate = parse_ts(row[0]), datetime.fromisoformat(row[1]), float(row[2])
-    return (anchor_sim + (_real_now() - anchor_real) * rate).astimezone(IST)
+    return row["t"].astimezone(IST)
 
 
-def set_clock(conn: sqlite3.Connection, sim_ts: str, rate: float | None = None) -> datetime:
-    cur_rate = conn.execute("SELECT rate FROM sim_clock WHERE id = 1").fetchone()
-    r = rate if rate is not None else (float(cur_rate[0]) if cur_rate else 1.0)
+def set_clock(conn: psycopg.Connection, sim_ts: str | datetime, rate: float | None = None) -> datetime:
+    t = parse_ts(sim_ts) if isinstance(sim_ts, str) else sim_ts
     conn.execute(
-        "INSERT INTO sim_clock (id, anchor_sim, anchor_real, rate) VALUES (1, ?, ?, ?) "
-        "ON CONFLICT(id) DO UPDATE SET anchor_sim = excluded.anchor_sim, "
-        "anchor_real = excluded.anchor_real, rate = excluded.rate",
-        (fmt_ts(parse_ts(sim_ts)), _real_now().isoformat(), r),
+        "INSERT INTO sim_clock (id, anchor_sim, anchor_real, rate) VALUES (1, %(t)s, clock_timestamp(), "
+        " COALESCE(%(r)s, 1.0)) ON CONFLICT (id) DO UPDATE SET anchor_sim = EXCLUDED.anchor_sim, "
+        " anchor_real = EXCLUDED.anchor_real, rate = COALESCE(%(r)s, sim_clock.rate)",
+        {"t": t, "r": rate},
     )
     return now(conn)
 
 
-def advance(conn: sqlite3.Connection, minutes: float) -> datetime:
-    return set_clock(conn, fmt_ts(now(conn) + timedelta(minutes=minutes)))
+def advance(conn: psycopg.Connection, minutes: float) -> datetime:
+    return set_clock(conn, now(conn) + timedelta(minutes=minutes))

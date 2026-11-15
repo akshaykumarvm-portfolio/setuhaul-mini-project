@@ -6,4 +6,7 @@ pydantic==2.14.3
 python-dotenv==1.2.4
 redis==8.1.0
 httpx==0.28.1
+psycopg[binary]==3.3.9
+psycopg-pool==3.3.3
+boto3==1.44.3
 ortools==9.15.6755
