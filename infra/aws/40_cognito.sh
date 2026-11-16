@@ -51,7 +51,7 @@ user() {  # username group [attr=value ...]
   echo "  $u ($g${*:+, $*})"
 }
 log "Demo users"
-for d in DRV006 DRV013 DRV004 DRV014 DRV012 DRV001 DRV015 DRV008; do
+for d in DRV006 DRV013 DRV004 DRV014 DRV012 DRV001 DRV015 DRV008 DRV009 DRV010; do
   user "$(echo "$d" | tr 'A-Z' 'a-z')" driver "driver_id=$d"
 done
 user neha.jaipur coordinator facility_id=FAC-JAI-01

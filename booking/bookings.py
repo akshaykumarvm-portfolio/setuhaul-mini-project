@@ -190,5 +190,8 @@ def reject(conn, appointment_id: str, reason: str, *, actor: str = "coordinator"
         code = "REQUEST_REJECTED" if status == "REJECTED" else "PENDING_LAPSED"
         hof = create_handoff(conn, appt["shipment_id"], code, reason, now, actor=actor)
         audit(conn, now, actor, code, appointment_id, dict(appt), {"status": status, "reason": reason})
-    publish(_facility(conn, appt["shipment_id"]), {"type": "SLOT_FREED", "slot_ids": slots})
-    return ok(appointment_id=appointment_id, status=status, freed_slot_ids=slots, handoff_id=hof["handoff_id"])
+    fac = _facility(conn, appt["shipment_id"])
+    from booking.sweeper import _reoffers   # who the freed slot now fits, highest priority first (also publishes)
+    reoffer = _reoffers(conn, {fac: slots}, clock.now(conn)).get(fac, [])
+    return ok(appointment_id=appointment_id, status=status, freed_slot_ids=slots, handoff_id=hof["handoff_id"],
+              reoffer=reoffer)

@@ -27,7 +27,7 @@ from booking import bookings, clock
 from booking.db import connect, write_tx
 from tests.conftest import ROOT, add_synthetic_shipments, set_now
 from tests.integrity import _client
-from tests.integrity.invariants import check_all
+from booking.invariants import check_all
 
 ROUNDS = int(os.getenv("RACE_ROUNDS", "100"))
 CLIENTS = 10

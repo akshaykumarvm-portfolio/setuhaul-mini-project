@@ -18,8 +18,10 @@ def _session_id(driver_id: str, thread_id: str) -> str:
     return sid if len(sid) >= 33 else sid.ljust(33, "0")     # AgentCore needs >= 33 characters
 
 
-def invoke_agent(driver_id: str, text: str, thread_id: str, message_id: str | None, token: str | None) -> dict:
-    payload = {"driver_id": driver_id, "text": text, "thread_id": thread_id, "message_id": message_id}
+def invoke_agent(driver_id: str, text: str, thread_id: str, message_id: str | None, token: str | None,
+                 scenario: str | None = None) -> dict:
+    payload = {"driver_id": driver_id, "text": text, "thread_id": thread_id, "message_id": message_id,
+               "scenario": scenario}
     mode = os.getenv("AGENT_INVOKE_MODE", "local")
     try:
         if mode == "agentcore":

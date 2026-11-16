@@ -15,6 +15,7 @@ from booking.config import get_settings
 from booking.eta import effective_eta
 from booking.feasibility import check_feasibility
 from booking.quotes import build_quote, get_quote
+from booking.surge import reserved_by
 
 
 def expire_holds_on(conn, slot_ids: list[str], now_ts: str) -> list[str]:
@@ -62,6 +63,10 @@ def hold_option(conn, quote_id: str, option_no: int, *, idem_key: str | None = N
             taken = [r for r in verdict.reasons if r.code in ("SLOT_TAKEN", "SLOT_HELD")]
             if taken:
                 return err("SLOT_TAKEN", taken[0].detail, fresh=build_quote(conn, shipment_id, now, thread_id=q["thread_id"]))
+            if (keeper := reserved_by(conn, shipment_id, slots, now)) is not None:
+                return err("PRIORITY_RESERVED", "In a busy wave this slot is being offered first to a higher-priority "
+                           "load. Here are other options.", reserved_for=keeper["priority"],
+                           fresh=build_quote(conn, shipment_id, now, thread_id=q["thread_id"]))
             if q["expires_at"] <= now_ts or slot_versions(conn, slots) != {k: q["versions"][k] for k in slots}:
                 return err("STALE", "This option changed since it was shown.",
                            fresh=build_quote(conn, shipment_id, now, thread_id=q["thread_id"]))

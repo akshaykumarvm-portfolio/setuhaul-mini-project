@@ -108,7 +108,7 @@ def test_agent_key(api):
 def test_chat_is_driver_only_and_uses_token_identity(api, monkeypatch):
     seen = {}
 
-    def fake_invoke(driver_id, text, thread_id, message_id, token_):
+    def fake_invoke(driver_id, text, thread_id, message_id, token_, scenario=None):
         seen.update(driver_id=driver_id, token=token_)
         return {"ok": True, "reply": "hi", "thread_id": thread_id}
     monkeypatch.setattr("booking.api.invoke_agent", fake_invoke)

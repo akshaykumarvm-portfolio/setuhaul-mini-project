@@ -196,6 +196,23 @@ def reset_demo(p: Principal = Who):
     return {"ok": True, "loaded_rows": sum((out["loaded_rows"] or {}).values()), "sim_now": clock.fmt_ts(t)}
 
 
+@app.get("/admin/invariants")
+def invariants(conn=Depends(db), p: Principal = Who):
+    """Decision 13 invariant queries on the live database; every list must be empty."""
+    require_staff(p)
+    from booking.invariants import check_all
+    v = check_all(conn)
+    return {"ok": not any(v.values()), "violations": v}
+
+
+@app.get("/facilities/{facility_id}/surge")
+def surge(facility_id: str, conn=Depends(db), p: Principal = Who):
+    require_staff(p)
+    check_facility(p, facility_id)
+    from booking.surge import surge_state
+    return surge_state(conn, facility_id, clock.now(conn))
+
+
 @app.post("/admin/sweep")
 def run_sweep(conn=Depends(db), p: Principal = Who):
     require_staff(p)
@@ -209,6 +226,7 @@ class ChatReq(BaseModel):
     thread_id: str | None = None
     message_id: str | None = None
     driver_id: str | None = None    # honoured only when AUTH_MODE=off (local dev)
+    scenario: str | None = None     # LangSmith tag for scripted scenario runs
 
 
 @app.post("/chat")
@@ -217,7 +235,8 @@ def chat(body: ChatReq, p: Principal = Who):
     if not driver_id:
         raise HTTPException(403, "chat is for driver accounts")
     thread_id = body.thread_id or f"CHAT-{driver_id}-{uuid.uuid4().hex[:8]}"
-    return invoke_agent(driver_id, body.text, thread_id, body.message_id or uuid.uuid4().hex, p.token)
+    return invoke_agent(driver_id, body.text, thread_id, body.message_id or uuid.uuid4().hex, p.token,
+                        scenario=body.scenario)
 
 
 # ---------- reads ----------

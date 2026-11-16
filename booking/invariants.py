@@ -1,4 +1,5 @@
-"""Invariant queries (Decision 13). Each returns the violating rows; all must be empty."""
+"""Invariant queries (Decision 13). Each returns the violating rows; all must be empty.
+Used by the integrity tests and by GET /admin/invariants (the scenario run's rubric check)."""
 
 ACTIVE = "('PENDING_CONFIRMATION','CONFIRMED','IN_PROGRESS')"
 
