@@ -57,9 +57,11 @@ class CloudTarget(Target):
         super().__init__(f"https://{env['WEB_DOMAIN']}/api")
         self.client_id = env["COGNITO_CLIENT_ID"]
         self.region = env["COGNITO_USER_POOL_ID"].split("_")[0]
-        import boto3
-        self.password = boto3.client("ssm", region_name=self.region).get_parameter(
-            Name="/setuhaul/DEMO_PASSWORD", WithDecryption=True)["Parameter"]["Value"]
+        import subprocess   # the AWS CLI handles every login type (incl. `aws login`), boto3 may not
+        self.password = subprocess.run(
+            ["aws", "ssm", "get-parameter", "--name", "/setuhaul/DEMO_PASSWORD", "--with-decryption",
+             "--query", "Parameter.Value", "--output", "text", "--region", self.region],
+            check=True, capture_output=True, text=True).stdout.strip()
         self.tokens: dict[str, tuple[str, float]] = {}
 
     def token(self, user: str) -> str:
@@ -142,6 +144,7 @@ class Run:
     def reset(self, at: str = "10:00"):
         code, r = self.api("planner", "POST", "/admin/reset")
         self.api("planner", "POST", "/admin/clock", {"sim_ts": f"2026-08-04T{at}:00+05:30", "rate": 0})
+        self.api("planner", "POST", "/admin/sweep")   # settle lapsed seed requests now, not whenever the 30 s loop runs
         self.note("planner", f"reset demo data, clock {at} frozen ({r.get('loaded_rows')} rows)")
 
 
@@ -185,6 +188,8 @@ def s1(run: Run):
     reply, st, _ = run.chat("drv013", "So am I booked now?", th, "SHP1013")
     run.check("while pending the agent does not say booked/confirmed", not run.replies[-1]["false_promise"], reply[:90])
     p = pending_of(run, "SHP1013")
+    if not run.check("the request is in the coordinator's queue", p is not None):
+        return
     code, c = run.api("neha.jaipur", "POST", f"/bookings/{p['appointment_id']}/confirm", {})
     run.note("neha.jaipur", f"confirms {p['appointment_id']} {p['dock_code']} {p['start'][11:16]} -> {c.get('status')}")
     run.check("coordinator confirm succeeds (feasibility re-checked inside the write)", code == 200 and c.get("status") == "CONFIRMED")
@@ -287,26 +292,31 @@ def s4(run: Run):
 
 def s5(run: Run):
     run.scenario("S5", "An option changes or disappears (APT1008 freed, then taken)",
-                 "The customer cancellation freed D2 10:00. A truck in the yard is offered it, someone else takes it "
-                 "first, the agent says so and offers fresh options; when that request is rejected the freed slot is "
-                 "re-offered by priority.")
-    run.reset("09:45")
+                 "The customer cancellation freed D2 10:00. A truck in the yard is offered it; meanwhile the coordinator "
+                 "moves HIGH-priority SHP1005 (stranded by the D3 breakdown) onto it by phone; the agent says the slot "
+                 "was taken and offers fresh options; when that request is rejected the freed slot is re-offered by priority.")
+    run.reset("10:00")
     th = f"S5-{uuid.uuid4().hex[:6]}"
     reply, st, _ = run.chat("drv004", "I'm already in the yard with SHP1004. Any dock free now?", th, "SHP1004")
     opts = option_lines(reply)
     run.check("the freed D2 10:00 slot is offered", ("D2", "10:00") in opts, f"{opts}")
-    _, q = run.api("planner", "POST", "/quotes", {"shipment_id": "SHP1003"})
-    opt = next(o["option_no"] for o in q["options"] if "SLOT-JAI-017" in o["slot_ids"])
+    _, q = run.api("planner", "POST", "/quotes", {"shipment_id": "SHP1005"})
+    opt = next((o["option_no"] for o in q["options"] if "SLOT-JAI-017" in o["slot_ids"]), None)
+    if not run.check("SHP1005 (HIGH, stranded by the D3 breakdown) can use D2 10:00", opt is not None,
+                     ", ".join(f"{o['dock_code']} {o['start'][11:16]}" for o in q.get("options", []))):
+        return
     _, h = run.api("planner", "POST", "/holds", {"quote_id": q["quote_id"], "option_no": opt})
+    if not run.check("coordinator's phone booking for SHP1005 (HIGH) holds D2 10:00 first", h.get("ok"), h.get("code", "")):
+        return
     _, b = run.api("planner", "POST", "/bookings", {"hold_id": h["hold_id"]})
-    run.note("planner", f"phone booking for SHP1003 takes D2 10:00 first -> {b.get('status')}")
+    run.note("planner", f"phone booking for SHP1005 takes D2 {h.get('start', '')[11:16]}-{h.get('end', '')[11:16]} -> {b.get('status')}")
     idx = next((i + 1 for i, o in enumerate(opts) if o == ("D2", "10:00")), 1)
     reply, st, _ = run.chat("drv004", f"Option {idx} please", th, "SHP1004")
     run.check("agent says the slot changed/was taken and shows fresh options",
               re.search(r"taken|no longer|just|changed|unavailable|not available", reply, re.I) is not None
               and not (st["hold"] and "SLOT-JAI-017" in json.dumps(st)), reply[:120])
-    code, rj = run.api("neha.jaipur", "POST", f"/bookings/{b['appointment_id']}/reject", {"reason": "Customer asked to hold SHP1003"})
-    run.note("neha.jaipur", f"rejects SHP1003 request -> freed {rj.get('freed_slot_ids')}, re-offer {[x['shipment_id'] for x in rj.get('reoffer', [])]}")
+    code, rj = run.api("neha.jaipur", "POST", f"/bookings/{b['appointment_id']}/reject", {"reason": "SHP1005 will wait for D3 to reopen"})
+    run.note("neha.jaipur", f"rejects SHP1005 request -> freed {rj.get('freed_slot_ids')}, re-offer {[x['shipment_id'] for x in rj.get('reoffer', [])]}")
     pri = {"CRITICAL": 4, "HIGH": 3, "NORMAL": 2, "LOW": 1}
     ro = rj.get("reoffer", [])
     run.check("freed slot re-offered, highest priority first", bool(ro) and

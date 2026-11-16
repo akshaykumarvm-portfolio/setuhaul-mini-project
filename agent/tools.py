@@ -38,6 +38,7 @@ class CaseState(AgentState):
     clarify_count: NotRequired[int]
     escalated: NotRequired[bool]
     turn_sig: NotRequired[list | None]
+    options: NotRequired[list | None]
 
 
 def _ref(rt: ToolRuntime) -> Any:
@@ -102,7 +103,17 @@ def record_eta(runtime: ToolRuntime[AgentContext, CaseState], eta_lo: str | None
     r = ctx.client.record_eta(shipment_id=st["shipment_id"], eta_lo=lo, eta_hi=hi, confidence=conf, cause=cause,
                               cause_fixed=cause_fixed, source_text=source_text or (st.get("facts") or {}).get("_text", ""),
                               thread_id=ctx.thread_id)
-    return _out(runtime, r, eta_confidence=conf if r.get("ok") else st.get("eta_confidence"))
+    update = {"eta_confidence": conf if r.get("ok") else st.get("eta_confidence")}
+    cur = r.get("current_appointment") if r.get("ok") else None
+    if r.get("ok") and conf != "LOW" and (cur is None or not cur.get("still_fits")):
+        # the slot no longer works and the ETA is usable: show options now, don't spend a turn asking
+        q = ctx.client.quote(st["shipment_id"], ctx.thread_id, None, None)
+        if q.get("ok"):
+            opts = [{k: o[k] for k in ("option_no", "dock_code", "start", "end", "needs_approval")} for o in q["options"]]
+            r["new_options"] = {"quote_id": q["quote_id"], "options": opts, "reserved": False,
+                                "note": "Show these to the driver now (not reserved)."}
+            update |= {"quote_id": q["quote_id"], "options": opts}
+    return _out(runtime, r, **update)
 
 
 @tool
@@ -118,7 +129,7 @@ def find_slot_options(runtime: ToolRuntime[AgentContext, CaseState], latest_fini
     if r.get("ok"):
         r["options"] = [{k: o[k] for k in ("option_no", "dock_code", "start", "end", "needs_approval")}
                         for o in r["options"]]
-        update = {"quote_id": r["quote_id"], "eta_confidence": r["eta"]["confidence"]}
+        update = {"quote_id": r["quote_id"], "eta_confidence": r["eta"]["confidence"], "options": r["options"]}
         if not r["options"] and not st.get("escalated"):
             # Decision 10: no feasible slot -> CODE creates the hand-off; the model only explains it
             h = ctx.client.escalate(st["shipment_id"], "NO_FEASIBLE_SLOT",
@@ -146,7 +157,7 @@ def hold_option(option_no: int, runtime: ToolRuntime[AgentContext, CaseState]) -
         f = r["fresh"]
         f["options"] = [{k: o[k] for k in ("option_no", "dock_code", "start", "end", "needs_approval")} for o in f["options"]]
         r["fresh"] = {k: f[k] for k in ("quote_id", "options", "excluded_docks") if k in f}
-        return _out(runtime, r, quote_id=f["quote_id"])
+        return _out(runtime, r, quote_id=f["quote_id"], options=f["options"])
     return _out(runtime, r)
 
 

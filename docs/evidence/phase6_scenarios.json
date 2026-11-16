@@ -1,0 +1,654 @@
+{
+ "target": "cloud",
+ "started": "2026-11-15 21:09",
+ "rubric": {
+  "conflicting_or_duplicate_allocations": 0,
+  "false_promises_in_replies": 0,
+  "agent_replies_checked": 13,
+  "no_slot_cases_with_complete_handoff": true,
+  "max_clarification_turns": 1,
+  "max_driver_turns_to_options": 2,
+  "priority_policy_violations": 0,
+  "checks_passed": 34,
+  "checks_total": 37
+ },
+ "scenarios": [
+  {
+   "id": "S1",
+   "title": "Delay reported, clarification answered (THR003 / SHP1013)",
+   "brief": "A vague delay gets one clarifying question; a stated time gets checked options; pick -> hold -> request -> coordinator confirms; the driver is told 'confirmed' only after that.",
+   "events": [
+    {
+     "actor": "planner",
+     "text": "reset demo data, clock 10:00 frozen (275 rows)"
+    },
+    {
+     "actor": "drv013",
+     "text": "I am late by one hour."
+    },
+    {
+     "actor": "agent",
+     "text": "Does that mean you'll reach the gate around 12:00, or could the delay keep growing?  (4.1s)"
+    },
+    {
+     "actor": "drv013",
+     "text": "I'll reach the gate at 11:10, traffic cleared."
+    },
+    {
+     "actor": "agent",
+     "text": "Your current appointment is for 11:00-12:00. You'll reach the gate at 11:10, so you'll be too early for that slot. Would you like to see other options?  (4.0s)"
+    },
+    {
+     "actor": "drv013",
+     "text": "Option 1"
+    },
+    {
+     "actor": "agent",
+     "text": "Here are some options, not reserved yet:\n1. Dock D2, 12:00-13:00\n2. Dock D1, 13:00-14:00\n3. Dock D3, 13:00-14:00\n\nWhich option would you like?  (3.2s)"
+    },
+    {
+     "actor": "drv013",
+     "text": "Yes, request it"
+    },
+    {
+     "actor": "agent",
+     "text": "Requested, waiting for the warehouse. Keep your current slot until I confirm.  (3.6s)"
+    },
+    {
+     "actor": "drv013",
+     "text": "So am I booked now?"
+    },
+    {
+     "actor": "agent",
+     "text": "Your request for Dock D2 at 12:00 is pending. Your previous appointment was cancelled because confirmation lapsed.  (2.9s)"
+    },
+    {
+     "actor": "neha.jaipur",
+     "text": "confirms APT-1A1E21E22CA0453 D2 12:00 -> CONFIRMED"
+    },
+    {
+     "actor": "drv013",
+     "text": "Is it confirmed now?"
+    },
+    {
+     "actor": "agent",
+     "text": "Yes, your appointment for Dock D2 at 12:00-13:00 is confirmed.  (2.8s)"
+    }
+   ],
+   "checks": [
+    {
+     "name": "vague delay -> a clarifying question, no options yet",
+     "ok": true,
+     "detail": ""
+    },
+    {
+     "name": "stated time -> options shown and labelled not reserved",
+     "ok": false,
+     "detail": "[]"
+    },
+    {
+     "name": "ETA recorded as 11:10 HIGH",
+     "ok": true,
+     "detail": "11:10 HIGH"
+    },
+    {
+     "name": "every option starts at or after ETA + 15 min (11:25)",
+     "ok": true,
+     "detail": "[]"
+    },
+    {
+     "name": "pick -> 5-minute hold, not a booking",
+     "ok": false,
+     "detail": ""
+    },
+    {
+     "name": "yes -> pending request; old slot not released",
+     "ok": true,
+     "detail": ""
+    },
+    {
+     "name": "while pending the agent does not say booked/confirmed",
+     "ok": true,
+     "detail": "Your request for Dock D2 at 12:00 is pending. Your previous appointment was cancelled beca"
+    },
+    {
+     "name": "the request is in the coordinator's queue",
+     "ok": true,
+     "detail": ""
+    },
+    {
+     "name": "coordinator confirm succeeds (feasibility re-checked inside the write)",
+     "ok": true,
+     "detail": ""
+    },
+    {
+     "name": "after the confirm the agent says confirmed, matching booking state",
+     "ok": true,
+     "detail": ""
+    }
+   ],
+   "metrics": {
+    "clarification_turns": 1,
+    "driver_turns_to_options": 2,
+    "resolved_without_takeover": true
+   }
+  },
+  {
+   "id": "S2",
+   "title": "Later options asked for and compared (THR011 / SHP1017)",
+   "brief": "An ask-only driver with a 12:30-13:00 window sees options after 13:00, compares them, and nothing is held or booked.",
+   "events": [
+    {
+     "actor": "planner",
+     "text": "reset demo data, clock 10:00 frozen (275 rows)"
+    },
+    {
+     "actor": "drv001",
+     "text": "Just looking, not booking yet: I'll arrive between 12:30 and 13:00. What dock slots are there after 13:00?"
+    },
+    {
+     "actor": "agent",
+     "text": "Your current appointment (D1 12:00-13:00) does not fit your new ETA. Here are some options after 13:00. These are not reserved yet:\n1. Dock D1, 14:00-14:50\n2. Dock D3, 14:00-14:50\n3. Dock D2, 14:00-14:50\n\nDo you want to book one of these?  (6.7s)"
+    },
+    {
+     "actor": "drv001",
+     "text": "How do options 1 and 2 compare?"
+    },
+    {
+     "actor": "agent",
+     "text": "Both options 1 and 2 are for 14:00-14:50. Option 1 is for Dock D1 and option 2 is for Dock D3.  (2.3s)"
+    }
+   ],
+   "checks": [
+    {
+     "name": "options shown, all at or after 13:15 (window late edge + 15)",
+     "ok": true,
+     "detail": "[('D1', '14:00'), ('D3', '14:00'), ('D2', '14:00')]"
+    },
+    {
+     "name": "comparing does not reserve anything",
+     "ok": true,
+     "detail": ""
+    },
+    {
+     "name": "ETA kept as a window planned on its late edge",
+     "ok": true,
+     "detail": "12:30-13:00 MEDIUM"
+    }
+   ],
+   "metrics": {
+    "clarification_turns": 0,
+    "driver_turns_to_options": 1
+   }
+  },
+  {
+   "id": "S3",
+   "title": "Several requests against one schedule, surge priority (SHP1006, 1009, 1012, 1014)",
+   "brief": "A fifth delay report tips Jaipur into surge mode; four loads chase the 11:00-13:00 standard slots; a NORMAL load cannot take a slot just shown to a CRITICAL one; all four end up booked without overlap.",
+   "events": [
+    {
+     "actor": "planner",
+     "text": "reset demo data, clock 10:00 frozen (275 rows)"
+    },
+    {
+     "actor": "drv009",
+     "text": "Traffic on the bypass, reaching the gate at 10:50."
+    },
+    {
+     "actor": "agent",
+     "text": "Your current appointment at D4 from 11:00 to 12:00 does not fit with your new ETA of 10:50. Would you like to see other options?  (5.8s)"
+    },
+    {
+     "actor": "drv012",
+     "text": "SHP1012 options: D2 12:00, D1 13:00, D3 13:00"
+    },
+    {
+     "actor": "drv006",
+     "text": "SHP1006 options: D2 12:00, D1 13:00, D3 13:00"
+    },
+    {
+     "actor": "drv014",
+     "text": "SHP1014 options: D2 12:00, D2 13:00, D4 13:00"
+    },
+    {
+     "actor": "drv009",
+     "text": "SHP1009 options: D2 12:00, D1 13:00, D3 13:00"
+    },
+    {
+     "actor": "drv012",
+     "text": "tries D2 12:00 -> PRIORITY_RESERVED"
+    },
+    {
+     "actor": "drv014",
+     "text": "SHP1014: hold D2 12:00 -> request PENDING_CONFIRMATION"
+    },
+    {
+     "actor": "drv009",
+     "text": "SHP1009: hold D1 13:00 -> request PENDING_CONFIRMATION"
+    },
+    {
+     "actor": "drv006",
+     "text": "SHP1006: hold D3 13:00 -> request PENDING_CONFIRMATION"
+    },
+    {
+     "actor": "drv012",
+     "text": "SHP1012: hold D4 13:00 -> request PENDING_CONFIRMATION"
+    },
+    {
+     "actor": "neha.jaipur",
+     "text": "confirm SHP1014 -> CONFIRMED D2 12:00"
+    },
+    {
+     "actor": "neha.jaipur",
+     "text": "confirm SHP1009 -> CONFIRMED D1 13:00"
+    },
+    {
+     "actor": "neha.jaipur",
+     "text": "confirm SHP1006 -> CONFIRMED D3 13:00"
+    },
+    {
+     "actor": "neha.jaipur",
+     "text": "confirm SHP1012 -> CONFIRMED D4 13:00"
+    }
+   ],
+   "checks": [
+    {
+     "name": "before: below the surge threshold",
+     "ok": true,
+     "detail": "4/5 loads active in 30 min"
+    },
+    {
+     "name": "a fifth delay report switches surge mode on",
+     "ok": true,
+     "detail": "5/5: ['SHP1006', 'SHP1009', 'SHP1012', 'SHP1014', 'SHP1016']"
+    },
+    {
+     "name": "NORMAL load cannot take a slot just shown to a CRITICAL load",
+     "ok": true,
+     "detail": "reserved for HIGH"
+    },
+    {
+     "name": "all four requests confirmed",
+     "ok": true,
+     "detail": ""
+    },
+    {
+     "name": "CRITICAL loads start no later than the NORMAL load",
+     "ok": true,
+     "detail": "{'SHP1014': '12:00', 'SHP1009': '13:00', 'SHP1006': '13:00', 'SHP1012': '13:00'}"
+    },
+    {
+     "name": "invariants clean: no double booking, no overlapping unloads",
+     "ok": true,
+     "detail": "{\"one_active_claim_per_slot\": 0, \"one_active_appointment_per_slot\": 0, \"no_overlapping_intervals_per_dock\": 0, \"one_current_appointment_per_shipment\": 0, \"no_live_hold_on_booked_slot\": 0, \"one_active_hold_per_slot\": 0, \"claims_match_status\": 0}"
+    }
+   ],
+   "metrics": {
+    "priority_policy_violations": 0
+   }
+  },
+  {
+   "id": "S4",
+   "title": "Two requests compete for one slot (SHP1006 vs SHP1012 on D2 12:00)",
+   "brief": "Outside a surge, both drivers pick D2 12:00 at the same instant; exactly one wins, the other is told it was just taken and gets fresh options.",
+   "events": [
+    {
+     "actor": "planner",
+     "text": "reset demo data, clock 10:00 frozen (275 rows)"
+    },
+    {
+     "actor": "SHP1006",
+     "text": "hold D2 12:00 -> HTTP 200 HELD"
+    },
+    {
+     "actor": "SHP1012",
+     "text": "hold D2 12:00 -> HTTP 409 SLOT_TAKEN"
+    }
+   ],
+   "checks": [
+    {
+     "name": "normal mode (first valid commit wins)",
+     "ok": true,
+     "detail": "4/5"
+    },
+    {
+     "name": "exactly one hold granted",
+     "ok": true,
+     "detail": "winner ['SHP1006']"
+    },
+    {
+     "name": "the other gets SLOT_TAKEN with fresh options",
+     "ok": true,
+     "detail": ""
+    },
+    {
+     "name": "invariants clean",
+     "ok": true,
+     "detail": ""
+    }
+   ],
+   "metrics": {}
+  },
+  {
+   "id": "S5",
+   "title": "An option changes or disappears (APT1008 freed, then taken)",
+   "brief": "The customer cancellation freed D2 10:00. A truck in the yard is offered it; meanwhile the coordinator moves HIGH-priority SHP1005 (stranded by the D3 breakdown) onto it by phone; the agent says the slot was taken and offers fresh options; when that request is rejected the freed slot is re-offered by priority.",
+   "events": [
+    {
+     "actor": "planner",
+     "text": "reset demo data, clock 10:00 frozen (275 rows)"
+    },
+    {
+     "actor": "drv004",
+     "text": "I'm already in the yard with SHP1004. Any dock free now?"
+    },
+    {
+     "actor": "agent",
+     "text": "Your current appointment (D2 09:00-10:00) no longer fits. Here are some options, not reserved yet:\n1. Dock D2 at 10:00-11:00\n2. Dock D2 at 12:00-13:00\n3. Dock D1 at 13:00-14:00\n\nWhich option would you like?  (6.2s)"
+    }
+   ],
+   "checks": [
+    {
+     "name": "the freed D2 10:00 slot is offered",
+     "ok": true,
+     "detail": "[('D2', '10:00'), ('D2', '12:00'), ('D1', '13:00')]"
+    },
+    {
+     "name": "scenario ran to completion",
+     "ok": false,
+     "detail": "StopIteration: "
+    }
+   ],
+   "metrics": {}
+  },
+  {
+   "id": "S6",
+   "title": "Escalation, no safe outcome (THR005 / SHP1015)",
+   "brief": "At 16:30 the reefer load reports an 18:30 arrival; D5 is in maintenance 18:00-22:00; the agent invents nothing, code raises a complete hand-off, the coordinator sees it.",
+   "events": [
+    {
+     "actor": "planner",
+     "text": "reset demo data, clock 16:30 frozen (275 rows)"
+    },
+    {
+     "actor": "drv015",
+     "text": "Evening traffic entering Jaipur. I will reach the gate at 18:30. Need a slot for my reefer load."
+    },
+    {
+     "actor": "agent",
+     "text": "Your current appointment at D5 from 17:00-18:00 no longer fits. I checked for new slots after 18:30, but there are no feasible options for a reefer load at Jaipur DC. This has been passed to a coordinator who will contact you.  (7.6s)"
+    }
+   ],
+   "checks": [
+    {
+     "name": "no slot invented (no numbered options)",
+     "ok": true,
+     "detail": ""
+    },
+    {
+     "name": "driver told a coordinator will contact them",
+     "ok": true,
+     "detail": "Your current appointment at D5 from 17:00-18:00 no longer fits. I checked for new slots after 18:30, but there are no fe"
+    },
+    {
+     "name": "hand-off NO_FEASIBLE_SLOT raised by code",
+     "ok": true,
+     "detail": ""
+    },
+    {
+     "name": "hand-off record complete",
+     "ok": true,
+     "detail": "all fields present"
+    },
+    {
+     "name": "record names the reason: D5 maintenance (DEVT002)",
+     "ok": true,
+     "detail": "D5: maintenance 18:00-22:00 (DEVT002: Planned refrigeration power maintenance)"
+    },
+    {
+     "name": "email not treated as delivered; console first",
+     "ok": true,
+     "detail": "console: QUEUED; email anita.joshi@setuhaul.example: NOT_SENT (console first); p"
+    }
+   ],
+   "metrics": {
+    "no_slot_handoff_complete": true
+   }
+  },
+  {
+   "id": "S7",
+   "title": "Scheduler after an ETA update (SHP1002 overrun, 1003 early, 1004 late, 1005 on broken D3, 1006 late)",
+   "brief": "CP-SAT and the dispatch rule re-plan every truck; both valid, CP-SAT never worse; after SHP1006 reports a later ETA the plan moves it, and nothing is booked by the scheduler.",
+   "events": [
+    {
+     "actor": "planner",
+     "text": "reset demo data, clock 10:00 frozen (275 rows)"
+    },
+    {
+     "actor": "neha.jaipur",
+     "text": "proposal: 16 trucks; rule wl=3020 cp-sat wl=3020 (FEASIBLE, 5.002s); recommend dispatch_rule"
+    },
+    {
+     "actor": "drv006",
+     "text": "new ETA 12:40 -> current slot still fits: False"
+    },
+    {
+     "actor": "neha.jaipur",
+     "text": "SHP1006: D4 12:00 -> D3 13:00 (earliest 12:55)"
+    }
+   ],
+   "checks": [
+    {
+     "name": "current promises flagged: broken D3, overweight D1, arrivals after their slot",
+     "ok": true,
+     "detail": "19 violations"
+    },
+    {
+     "name": "both proposals valid",
+     "ok": true,
+     "detail": ""
+    },
+    {
+     "name": "CP-SAT never worse than the dispatch rule",
+     "ok": true,
+     "detail": "703015 <= 703015"
+    },
+    {
+     "name": "after the ETA update the plan moves SHP1006 to after 12:55",
+     "ok": true,
+     "detail": "D3 13:00"
+    },
+    {
+     "name": "the scheduler booked nothing",
+     "ok": true,
+     "detail": ""
+    }
+   ],
+   "metrics": {}
+  },
+  {
+   "id": "X1",
+   "title": "Extra: duplicate message (THR001 / THR009)",
+   "brief": "A messaging retry is answered once.",
+   "events": [
+    {
+     "actor": "planner",
+     "text": "reset demo data, clock 10:00 frozen (275 rows)"
+    },
+    {
+     "actor": "drv006",
+     "text": "Traffic after Shahpura. Reaching around 11:20. Any slot after 12? (6658)"
+    },
+    {
+     "actor": "agent",
+     "text": "I can't find a load with reference 6658. Do you mean ORD-260804-006 or ORD-260804-021?  (4.2s)"
+    },
+    {
+     "actor": "drv006",
+     "text": "Traffic after Shahpura. Reaching around 11:20. Any slot after 12? (6658)"
+    },
+    {
+     "actor": "agent",
+     "text": "I can't find a load with reference 6658. Do you mean ORD-260804-006 or ORD-260804-021?  (0.3s)"
+    },
+    {
+     "actor": "planner",
+     "text": "reset demo data, clock 10:00 frozen (275 rows)"
+    }
+   ],
+   "checks": [
+    {
+     "name": "retry with the same message id answered once, same reply",
+     "ok": true,
+     "detail": ""
+    }
+   ],
+   "metrics": {}
+  }
+ ],
+ "replies": [
+  {
+   "scenario": "S1",
+   "thread": "S1-bf085c",
+   "user": "drv013",
+   "text": "I am late by one hour.",
+   "reply": "Does that mean you'll reach the gate around 12:00, or could the delay keep growing?",
+   "stage": "NONE",
+   "false_promise": false,
+   "duplicate": false,
+   "asks": true
+  },
+  {
+   "scenario": "S1",
+   "thread": "S1-bf085c",
+   "user": "drv013",
+   "text": "I'll reach the gate at 11:10, traffic cleared.",
+   "reply": "Your current appointment is for 11:00-12:00. You'll reach the gate at 11:10, so you'll be too early for that slot. Would you like to see other options?",
+   "stage": "NONE",
+   "false_promise": false,
+   "duplicate": false,
+   "asks": true
+  },
+  {
+   "scenario": "S1",
+   "thread": "S1-bf085c",
+   "user": "drv013",
+   "text": "Option 1",
+   "reply": "Here are some options, not reserved yet:\n1. Dock D2, 12:00-13:00\n2. Dock D1, 13:00-14:00\n3. Dock D3, 13:00-14:00\n\nWhich option would you like?",
+   "stage": "NONE",
+   "false_promise": false,
+   "duplicate": false,
+   "asks": true
+  },
+  {
+   "scenario": "S1",
+   "thread": "S1-bf085c",
+   "user": "drv013",
+   "text": "Yes, request it",
+   "reply": "Requested, waiting for the warehouse. Keep your current slot until I confirm.",
+   "stage": "PENDING",
+   "false_promise": false,
+   "duplicate": false,
+   "asks": false
+  },
+  {
+   "scenario": "S1",
+   "thread": "S1-bf085c",
+   "user": "drv013",
+   "text": "So am I booked now?",
+   "reply": "Your request for Dock D2 at 12:00 is pending. Your previous appointment was cancelled because confirmation lapsed.",
+   "stage": "PENDING",
+   "false_promise": false,
+   "duplicate": false,
+   "asks": false
+  },
+  {
+   "scenario": "S1",
+   "thread": "S1-bf085c",
+   "user": "drv013",
+   "text": "Is it confirmed now?",
+   "reply": "Yes, your appointment for Dock D2 at 12:00-13:00 is confirmed.",
+   "stage": "CONFIRMED",
+   "false_promise": false,
+   "duplicate": false,
+   "asks": false
+  },
+  {
+   "scenario": "S2",
+   "thread": "S2-1389de",
+   "user": "drv001",
+   "text": "Just looking, not booking yet: I'll arrive between 12:30 and 13:00. What dock slots are there after 13:00?",
+   "reply": "Your current appointment (D1 12:00-13:00) does not fit your new ETA. Here are some options after 13:00. These are not reserved yet:\n1. Dock D1, 14:00-14:50\n2. Dock D3, 14:00-14:50\n3. Dock D2, 14:00-14:50\n\nDo you want to book one of these?",
+   "stage": "CONFIRMED",
+   "false_promise": false,
+   "duplicate": false,
+   "asks": true
+  },
+  {
+   "scenario": "S2",
+   "thread": "S2-1389de",
+   "user": "drv001",
+   "text": "How do options 1 and 2 compare?",
+   "reply": "Both options 1 and 2 are for 14:00-14:50. Option 1 is for Dock D1 and option 2 is for Dock D3.",
+   "stage": "CONFIRMED",
+   "false_promise": false,
+   "duplicate": false,
+   "asks": false
+  },
+  {
+   "scenario": "S3",
+   "thread": "S3-9-e8cf",
+   "user": "drv009",
+   "text": "Traffic on the bypass, reaching the gate at 10:50.",
+   "reply": "Your current appointment at D4 from 11:00 to 12:00 does not fit with your new ETA of 10:50. Would you like to see other options?",
+   "stage": "CONFIRMED",
+   "false_promise": false,
+   "duplicate": false,
+   "asks": true
+  },
+  {
+   "scenario": "S5",
+   "thread": "S5-950ca9",
+   "user": "drv004",
+   "text": "I'm already in the yard with SHP1004. Any dock free now?",
+   "reply": "Your current appointment (D2 09:00-10:00) no longer fits. Here are some options, not reserved yet:\n1. Dock D2 at 10:00-11:00\n2. Dock D2 at 12:00-13:00\n3. Dock D1 at 13:00-14:00\n\nWhich option would you like?",
+   "stage": "CONFIRMED",
+   "false_promise": false,
+   "duplicate": false,
+   "asks": true
+  },
+  {
+   "scenario": "S6",
+   "thread": "S6-4dbcf7",
+   "user": "drv015",
+   "text": "Evening traffic entering Jaipur. I will reach the gate at 18:30. Need a slot for my reefer load.",
+   "reply": "Your current appointment at D5 from 17:00-18:00 no longer fits. I checked for new slots after 18:30, but there are no feasible options for a reefer load at Jaipur DC. This has been passed to a coordinator who will contact you.",
+   "stage": "CONFIRMED",
+   "false_promise": false,
+   "duplicate": false,
+   "asks": false
+  },
+  {
+   "scenario": "X1",
+   "thread": "X1-ea4927",
+   "user": "drv006",
+   "text": "Traffic after Shahpura. Reaching around 11:20. Any slot after 12? (6658)",
+   "reply": "I can't find a load with reference 6658. Do you mean ORD-260804-006 or ORD-260804-021?",
+   "stage": null,
+   "false_promise": false,
+   "duplicate": false,
+   "asks": true
+  },
+  {
+   "scenario": "X1",
+   "thread": "X1-ea4927",
+   "user": "drv006",
+   "text": "Traffic after Shahpura. Reaching around 11:20. Any slot after 12? (6658)",
+   "reply": "I can't find a load with reference 6658. Do you mean ORD-260804-006 or ORD-260804-021?",
+   "stage": null,
+   "false_promise": false,
+   "duplicate": true,
+   "asks": true
+  }
+ ]
+}

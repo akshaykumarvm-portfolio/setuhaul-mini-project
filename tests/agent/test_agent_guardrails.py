@@ -200,3 +200,27 @@ def test_cannot_hold_options_the_driver_has_not_seen(make_intake, booking_api):
     ])
     turn(intake, "DRV006", "option 1 please", "T13")
     assert booking_api.get("/shipments/SHP1006/status").json()["hold"] is None
+
+
+def test_options_are_listed_even_if_the_model_forgets(make_intake, booking_api):
+    intake, _ = make_intake([
+        ai("", ("link_shipment", {"shipment_ref": "SHP1006"})),
+        ai("", ("find_slot_options", {})),
+        ai("Your slot no longer fits. Would you like to see other options?"),   # forgets to list them
+    ])
+    r = turn(intake, "DRV006", "late, reaching 11:20", "T14")
+    assert "Options (not reserved yet):" in r["reply"] and "1. Dock" in r["reply"]
+
+
+def test_record_eta_fetches_options_when_current_slot_no_longer_fits(make_intake, booking_api):
+    intake, _ = make_intake([
+        ai("", ("link_shipment", {"shipment_ref": "SHP1006"})),
+        ai("", ("record_eta", {"eta_lo": "11:20", "eta_hi": "11:20", "confidence": "HIGH"})),
+        ai("Noted, your 10:00 slot no longer fits."),
+        ai("", ("hold_option", {"option_no": 1})),
+        ai("Held. Shall I request it?"),
+    ])
+    r1 = turn(intake, "DRV006", "Reaching the gate at 11:20", "T15")
+    assert "1. Dock" in r1["reply"] and r1["state"]["quote_id"]
+    turn(intake, "DRV006", "option 1", "T15")
+    assert booking_api.get("/shipments/SHP1006/status").json()["hold"] is not None

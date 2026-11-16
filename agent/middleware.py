@@ -90,6 +90,18 @@ class WriteGuard(AgentMiddleware[CaseState, AgentContext]):
 class ReplyPostCheck(AgentMiddleware[CaseState, AgentContext]):
     state_schema = CaseState
 
+    @staticmethod
+    def _ensure_options_listed(state, last, text):
+        """New options this turn but the reply doesn't list them: append them, rendered from the quote."""
+        sig = state.get("turn_sig") or [None, None, None]
+        opts = state.get("options") or []
+        if not opts or state.get("quote_id") in (None, sig[2]):
+            return None
+        if re.search(r"(?m)^\s*\d+\.\s", text):
+            return None
+        fixed = (text.rstrip() + "\n\n" if text.strip() else "") + render_options(opts)
+        return {"messages": [AIMessage(content=fixed, id=last.id)]}
+
     def after_model(self, state, runtime):
         msgs = state["messages"]
         last = msgs[-1]
@@ -115,13 +127,22 @@ class ReplyPostCheck(AgentMiddleware[CaseState, AgentContext]):
             if not problems:
                 return {"escalated": True}
         if not problems:
-            return None
+            return self._ensure_options_listed(state, last, text)
         log.warning("reply blocked: %s | %r", problems, text[:200])
         if status is None and state.get("shipment_id"):
             status = runtime.context.client.status(state["shipment_id"])
         safe = AIMessage(content=_stage_reply(status), id=last.id,
                          response_metadata={"post_check_blocked": problems, "original": text})
         return {"messages": [safe]}
+
+
+def render_options(options: list[dict]) -> str:
+    lines = ["Options (not reserved yet):"]
+    for o in options:
+        flag = " (needs coordinator approval)" if o.get("needs_approval") else ""
+        lines.append(f"{o['option_no']}. Dock {o['dock_code']}, {o['start'][11:16]}-{o['end'][11:16]}{flag}")
+    lines.append("Reply with the option number to hold it for 5 minutes.")
+    return "\n".join(lines)
 
 
 class TurnOutcome(AgentMiddleware[CaseState, AgentContext]):
