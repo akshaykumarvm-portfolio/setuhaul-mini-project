@@ -106,6 +106,14 @@ curl -s -o /dev/null -w "%{http_code}\n" https://<domain>/api/bookings \
 ```
 `rohit.gurugram` cannot see or act on Jaipur's queue; only `planner` can move the clock or reset.
 
+## 8b. Run every scenario automatically
+
+```bash
+python -m tests.scenarios.run_scenarios --target cloud      # ~6 min; writes docs/evidence/phase6_scenarios.md
+python -m evals.score_scenarios                             # rubric feedback onto the LangSmith traces
+```
+It resets the demo data before each scenario and again at the end (clock 10:00).
+
 ## 9. Behind the scenes
 
 * **LangSmith** project `setuhaul`: one `driver_message` trace per message (extraction, every middleware step, model

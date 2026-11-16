@@ -1,7 +1,7 @@
 # SetuHaul FDE prototype
 
 Driver delay conversations + dock re-slotting without infeasible or conflicting promises.
-**The LLM talks, code decides.** Spec: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) · **How to test it end to end: [docs/TESTING.md](docs/TESTING.md)**
+**The LLM talks, code decides.** Spec: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) · **How to test it end to end: [docs/TESTING.md](docs/TESTING.md)** · **Readout: [docs/READOUT.md](docs/READOUT.md)**
 
 ## Status
 
@@ -12,7 +12,7 @@ Driver delay conversations + dock re-slotting without infeasible or conflicting 
 | 3 | LangChain agent, intake, middleware, Redis checkpointer, LangSmith, AgentCore entrypoint | done (local); deployed on AgentCore in phase 4; output in [docs/evidence/phase3_test_output.txt](docs/evidence/phase3_test_output.txt) |
 | 4 | React driver chat + ops console, Cognito, CloudFront, AgentCore | done; **deployed**; output in [docs/evidence/phase4_test_output.txt](docs/evidence/phase4_test_output.txt) |
 | 5 | CP-SAT scheduler vs dispatch-rule baseline | done; comparison in [docs/evidence/phase5_comparison.md](docs/evidence/phase5_comparison.md), tests in [docs/evidence/phase5_test_output.txt](docs/evidence/phase5_test_output.txt) |
-| 6 | Scripted scenario run, brief steps 1-7 | next |
+| 6 | Scripted scenario run, brief steps 1-7 | done; **40/40 checks on AWS, twice**: [docs/evidence/phase6_scenarios.md](docs/evidence/phase6_scenarios.md) |
 
 ## Changes from the spec (agreed with the project owner)
 
@@ -27,7 +27,7 @@ Driver delay conversations + dock re-slotting without infeasible or conflicting 
 | Default "now" 09:30 | **10:00** | After every morning ETA report in the data, so SHP1006's 11:20 update exists |
 | Holds need only feasibility | Holds and requests also refuse a **LOW-confidence ETA** (`ETA_UNCONFIRMED`) and **contradictory driver data** (A8) | Code, not only the agent prompt, stops a promise built on a vague ETA or a driver on two trucks |
 | 10 concurrent `request_booking` for one slot (Decision 13) | Race tested at three layers: 10 clients hold one slot; 10 clients request one hold; 10 writers bypass app checks and insert directly | Holds are exclusive per slot, so 10 requests for one slot can only arrive through one hold, or through a bug |
-| Surge-mode batching (Decision 7) | Not in phase 2: first valid commit wins | Built with the phase 6 competing-trucks scenario |
+| Surge-mode batching (Decision 7): requests batched for 2 minutes | Synchronous priority window: a slot shown to a higher-priority truck in the last 2 min is kept for it during a surge | Same winner as batching; a driver in a chat never waits for a batch to close |
 | A range ETA ("12:30-13:00") is LOW | A stated range is **MEDIUM**, planned on its late edge; LOW is kept for unbounded phrases ("late by an hour", a repair time) | LOW blocks holds, so a driver who gives an honest range could never book |
 | `langgraph-checkpoint-redis` | Small custom `RedisSaver` on plain keys (`agent/checkpointer.py`) | Upstash has no RediSearch/RedisJSON modules |
 | Agent writes the transcript | Intake writes it through the booking API (`/threads/...`) | The agent never touches the database |
@@ -36,11 +36,27 @@ Driver delay conversations + dock re-slotting without infeasible or conflicting 
 | `amazon-cognito-identity-js` | Cognito `InitiateAuth` called with `fetch` (USER_PASSWORD_AUTH over TLS + refresh) | The SDK is deprecated; no dependency needed |
 | Scheduler weights waiting the same for every truck | Lateness is priority-weighted for **every** truck (due = promise, or earliest start if none) | First run pushed a HIGH truck 90 min back to favour a NORMAL one |
 | CP-SAT run cold | CP-SAT starts from the baseline as a solution hint | Cold, it was once worse than the rule within 5 s; a proposal tool must never be worse |
+| Agent decides when to show options | When the slot no longer fits and the ETA is usable, the tool fetches options; if the reply omits them, code appends them from the quote | Live runs: the model kept asking "would you like to see options?", costing turns |
 | Agent may hold any option it fetched | Only an option the driver has already **seen** (shown in an earlier message, same numbering) | Live test: the model fetched and held "option 1" before the driver saw the list |
 
 The 18 supplied tables keep every column exactly as supplied (timestamps stay `TEXT`, `+05:30`);
 the database uses the `C` collation so text timestamps sort exactly in time order. The only
 added column is `appointment_slots.version`.
+
+## Scenario run (phase 6)
+
+`python -m tests.scenarios.run_scenarios --target cloud` drives the deployed system as its users: drivers chat through
+`/chat` (AgentCore), the coordinator and planner use the console's API. Checks read the booking service, not the
+model's wording. Steps: S1 vague delay -> clarify -> options -> hold -> request -> confirm; S2 ask-only options after
+13:00; S3 surge wave with four loads and priority; S4 two drivers, one slot; S5 a slot taken mid-conversation and
+re-offered on rejection; S6 no feasible reefer slot -> complete hand-off; S7 CP-SAT re-plan after an ETA update; X1
+duplicate retry. `python -m evals.score_scenarios` then writes rubric feedback onto each LangSmith trace and keeps the
+turns as dataset `setuhaul-scenario-turns`.
+
+**Surge priority (Decision 7)**: with >= 5 loads reporting at a facility within 30 minutes, a slot shown to a
+higher-priority truck in the last 2 minutes is kept for it while it decides (`PRIORITY_RESERVED` + fresh options for a
+lower-priority asker); outside a surge the first valid commit wins. Same winner as the spec's 2-minute batch, without
+making drivers wait.
 
 ## Facility scheduler (phase 5)
 

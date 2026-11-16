@@ -1,16 +1,16 @@
 {
  "target": "cloud",
- "started": "2026-11-15 21:09",
+ "started": "2026-11-15 21:14",
  "rubric": {
   "conflicting_or_duplicate_allocations": 0,
   "false_promises_in_replies": 0,
-  "agent_replies_checked": 13,
+  "agent_replies_checked": 14,
   "no_slot_cases_with_complete_handoff": true,
   "max_clarification_turns": 1,
   "max_driver_turns_to_options": 2,
   "priority_policy_violations": 0,
-  "checks_passed": 34,
-  "checks_total": 37
+  "checks_passed": 40,
+  "checks_total": 40
  },
  "scenarios": [
   {
@@ -28,7 +28,7 @@
     },
     {
      "actor": "agent",
-     "text": "Does that mean you'll reach the gate around 12:00, or could the delay keep growing?  (4.1s)"
+     "text": "Does that mean you'll reach the gate around 12:00, or could the delay keep growing?  (10.0s)"
     },
     {
      "actor": "drv013",
@@ -36,7 +36,7 @@
     },
     {
      "actor": "agent",
-     "text": "Your current appointment is for 11:00-12:00. You'll reach the gate at 11:10, so you'll be too early for that slot. Would you like to see other options?  (4.0s)"
+     "text": "Here are some options, not reserved yet:\n1. Dock D2, 12:00-13:00\n2. Dock D1, 13:00-14:00\n3. Dock D3, 13:00-14:00\n\nWhich option would you like?  (4.5s)"
     },
     {
      "actor": "drv013",
@@ -44,7 +44,7 @@
     },
     {
      "actor": "agent",
-     "text": "Here are some options, not reserved yet:\n1. Dock D2, 12:00-13:00\n2. Dock D1, 13:00-14:00\n3. Dock D3, 13:00-14:00\n\nWhich option would you like?  (3.2s)"
+     "text": "I have held Dock D2 for you from 12:00-13:00. This hold will expire in 5 minutes. Would you like to book it?  (3.0s)"
     },
     {
      "actor": "drv013",
@@ -52,7 +52,7 @@
     },
     {
      "actor": "agent",
-     "text": "Requested, waiting for the warehouse. Keep your current slot until I confirm.  (3.6s)"
+     "text": "Requested, waiting for the warehouse. Keep your current slot until I confirm.  (2.8s)"
     },
     {
      "actor": "drv013",
@@ -60,11 +60,11 @@
     },
     {
      "actor": "agent",
-     "text": "Your request for Dock D2 at 12:00 is pending. Your previous appointment was cancelled because confirmation lapsed.  (2.9s)"
+     "text": "Your request for Dock D2 from 12:00-13:00 is pending confirmation from the warehouse. You are not booked yet.  (3.0s)"
     },
     {
      "actor": "neha.jaipur",
-     "text": "confirms APT-1A1E21E22CA0453 D2 12:00 -> CONFIRMED"
+     "text": "confirms APT-1A1E22301793157 D2 12:00 -> CONFIRMED"
     },
     {
      "actor": "drv013",
@@ -72,7 +72,7 @@
     },
     {
      "actor": "agent",
-     "text": "Yes, your appointment for Dock D2 at 12:00-13:00 is confirmed.  (2.8s)"
+     "text": "Yes, your booking for Dock D2 from 12:00-13:00 is confirmed.  (2.6s)"
     }
    ],
    "checks": [
@@ -83,8 +83,8 @@
     },
     {
      "name": "stated time -> options shown and labelled not reserved",
-     "ok": false,
-     "detail": "[]"
+     "ok": true,
+     "detail": "[('D2', '12:00'), ('D1', '13:00'), ('D3', '13:00')]"
     },
     {
      "name": "ETA recorded as 11:10 HIGH",
@@ -94,11 +94,11 @@
     {
      "name": "every option starts at or after ETA + 15 min (11:25)",
      "ok": true,
-     "detail": "[]"
+     "detail": "[('D2', '12:00'), ('D1', '13:00'), ('D3', '13:00')]"
     },
     {
      "name": "pick -> 5-minute hold, not a booking",
-     "ok": false,
+     "ok": true,
      "detail": ""
     },
     {
@@ -109,7 +109,7 @@
     {
      "name": "while pending the agent does not say booked/confirmed",
      "ok": true,
-     "detail": "Your request for Dock D2 at 12:00 is pending. Your previous appointment was cancelled beca"
+     "detail": "Your request for Dock D2 from 12:00-13:00 is pending confirmation from the warehouse. You "
     },
     {
      "name": "the request is in the coordinator's queue",
@@ -148,7 +148,7 @@
     },
     {
      "actor": "agent",
-     "text": "Your current appointment (D1 12:00-13:00) does not fit your new ETA. Here are some options after 13:00. These are not reserved yet:\n1. Dock D1, 14:00-14:50\n2. Dock D3, 14:00-14:50\n3. Dock D2, 14:00-14:50\n\nDo you want to book one of these?  (6.7s)"
+     "text": "Your current appointment for SHP1017 at D1 from 12:00-13:00 no longer fits.\n\nHere are some dock slot options after 13:00 (these are not reserved yet):\n1. D1 from 14:00-14:50\n2. D3 from 14:00-14:50\n3. D2 from 14:00-14:50\n\nDo any of these work for you?  (13.8s)"
     },
     {
      "actor": "drv001",
@@ -156,7 +156,7 @@
     },
     {
      "actor": "agent",
-     "text": "Both options 1 and 2 are for 14:00-14:50. Option 1 is for Dock D1 and option 2 is for Dock D3.  (2.3s)"
+     "text": "Both options 1 and 2 are for a dock slot from 14:00-14:50. Option 1 is for Dock 1 (D1) and Option 2 is for Dock 3 (D3).  (2.2s)"
     }
    ],
    "checks": [
@@ -196,7 +196,7 @@
     },
     {
      "actor": "agent",
-     "text": "Your current appointment at D4 from 11:00 to 12:00 does not fit with your new ETA of 10:50. Would you like to see other options?  (5.8s)"
+     "text": "Your current appointment at D4 from 11:00-12:00 no longer fits. Here are other options, not reserved yet:\n1. Dock D2, 12:00-13:15\n2. Dock D1, 13:00-14:15\n3. Dock D3, 13:00-14:15\n\nWhich option would you like?  (6.2s)"
     },
     {
      "actor": "drv012",
@@ -344,19 +344,50 @@
     },
     {
      "actor": "agent",
-     "text": "Your current appointment (D2 09:00-10:00) no longer fits. Here are some options, not reserved yet:\n1. Dock D2 at 10:00-11:00\n2. Dock D2 at 12:00-13:00\n3. Dock D1 at 13:00-14:00\n\nWhich option would you like?  (6.2s)"
+     "text": "Your current appointment (APT1004 D2 09:00-10:00) no longer fits. Here are some options, not reserved yet:\n1. D2 10:00-11:00\n2. D2 11:00-12:00\n3. D2 12:00-13:00\n\nWhich option would you like?  (5.4s)"
+    },
+    {
+     "actor": "planner",
+     "text": "phone booking for SHP1005 takes D2 10:00-11:15 -> PENDING_CONFIRMATION"
+    },
+    {
+     "actor": "drv004",
+     "text": "Option 1 please"
+    },
+    {
+     "actor": "agent",
+     "text": "Sorry, that slot was just taken. Here are the updated options, not reserved yet:\n1. D2 12:00-13:00\n2. D1 13:00-14:00\n3. D3 13:00-14:00\n\nWhich option would you like?  (2.8s)"
+    },
+    {
+     "actor": "neha.jaipur",
+     "text": "rejects SHP1005 request -> freed ['SLOT-JAI-017', 'SLOT-JAI-018'], re-offer ['SHP1004', 'SHP1003']"
     }
    ],
    "checks": [
     {
      "name": "the freed D2 10:00 slot is offered",
      "ok": true,
-     "detail": "[('D2', '10:00'), ('D2', '12:00'), ('D1', '13:00')]"
+     "detail": "[('D2', '10:00'), ('D2', '11:00'), ('D2', '12:00')]"
     },
     {
-     "name": "scenario ran to completion",
-     "ok": false,
-     "detail": "StopIteration: "
+     "name": "SHP1005 (HIGH, stranded by the D3 breakdown) can use D2 10:00",
+     "ok": true,
+     "detail": "D2 10:00, D2 11:00, D2 12:00"
+    },
+    {
+     "name": "coordinator's phone booking for SHP1005 (HIGH) holds D2 10:00 first",
+     "ok": true,
+     "detail": ""
+    },
+    {
+     "name": "agent says the slot changed/was taken and shows fresh options",
+     "ok": true,
+     "detail": "Sorry, that slot was just taken. Here are the updated options, not reserved yet:\n1. D2 12:00-13:00\n2. D1 13:00-14:00\n3. "
+    },
+    {
+     "name": "freed slot re-offered, highest priority first",
+     "ok": true,
+     "detail": "[{'shipment_id': 'SHP1004', 'priority': 'NORMAL'}, {'shipment_id': 'SHP1003', 'priority': 'LOW'}]"
     }
    ],
    "metrics": {}
@@ -376,7 +407,7 @@
     },
     {
      "actor": "agent",
-     "text": "Your current appointment at D5 from 17:00-18:00 no longer fits. I checked for new slots after 18:30, but there are no feasible options for a reefer load at Jaipur DC. This has been passed to a coordinator who will contact you.  (7.6s)"
+     "text": "Your current appointment at D5 from 17:00-18:00 no longer fits because of your new arrival time. I checked for new options after 18:30, but there are no feasible slots for your reefer load. Dock D5 has planned refrigeration power maintenance from 18:00-22:00. A coordinator will contact you to discuss this.  (7.1s)"
     }
    ],
    "checks": [
@@ -388,7 +419,7 @@
     {
      "name": "driver told a coordinator will contact them",
      "ok": true,
-     "detail": "Your current appointment at D5 from 17:00-18:00 no longer fits. I checked for new slots after 18:30, but there are no fe"
+     "detail": "Your current appointment at D5 from 17:00-18:00 no longer fits because of your new arrival time. I checked for new optio"
     },
     {
      "name": "hand-off NO_FEASIBLE_SLOT raised by code",
@@ -426,7 +457,7 @@
     },
     {
      "actor": "neha.jaipur",
-     "text": "proposal: 16 trucks; rule wl=3020 cp-sat wl=3020 (FEASIBLE, 5.002s); recommend dispatch_rule"
+     "text": "proposal: 16 trucks; rule wl=2990 cp-sat wl=2990 (FEASIBLE, 5.002s); recommend dispatch_rule"
     },
     {
      "actor": "drv006",
@@ -441,7 +472,7 @@
     {
      "name": "current promises flagged: broken D3, overweight D1, arrivals after their slot",
      "ok": true,
-     "detail": "19 violations"
+     "detail": "18 violations"
     },
     {
      "name": "both proposals valid",
@@ -451,7 +482,7 @@
     {
      "name": "CP-SAT never worse than the dispatch rule",
      "ok": true,
-     "detail": "703015 <= 703015"
+     "detail": "699985 <= 699985"
     },
     {
      "name": "after the ETA update the plan moves SHP1006 to after 12:55",
@@ -477,19 +508,19 @@
     },
     {
      "actor": "drv006",
-     "text": "Traffic after Shahpura. Reaching around 11:20. Any slot after 12? (6658)"
+     "text": "Traffic after Shahpura. Reaching around 11:20. Any slot after 12? (ff13)"
     },
     {
      "actor": "agent",
-     "text": "I can't find a load with reference 6658. Do you mean ORD-260804-006 or ORD-260804-021?  (4.2s)"
+     "text": "I can't find a load with reference ff13. Is there another reference for this shipment?  (3.3s)"
     },
     {
      "actor": "drv006",
-     "text": "Traffic after Shahpura. Reaching around 11:20. Any slot after 12? (6658)"
+     "text": "Traffic after Shahpura. Reaching around 11:20. Any slot after 12? (ff13)"
     },
     {
      "actor": "agent",
-     "text": "I can't find a load with reference 6658. Do you mean ORD-260804-006 or ORD-260804-021?  (0.3s)"
+     "text": "I can't find a load with reference ff13. Is there another reference for this shipment?  (0.3s)"
     },
     {
      "actor": "planner",
@@ -509,7 +540,7 @@
  "replies": [
   {
    "scenario": "S1",
-   "thread": "S1-bf085c",
+   "thread": "S1-092048",
    "user": "drv013",
    "text": "I am late by one hour.",
    "reply": "Does that mean you'll reach the gate around 12:00, or could the delay keep growing?",
@@ -520,20 +551,9 @@
   },
   {
    "scenario": "S1",
-   "thread": "S1-bf085c",
+   "thread": "S1-092048",
    "user": "drv013",
    "text": "I'll reach the gate at 11:10, traffic cleared.",
-   "reply": "Your current appointment is for 11:00-12:00. You'll reach the gate at 11:10, so you'll be too early for that slot. Would you like to see other options?",
-   "stage": "NONE",
-   "false_promise": false,
-   "duplicate": false,
-   "asks": true
-  },
-  {
-   "scenario": "S1",
-   "thread": "S1-bf085c",
-   "user": "drv013",
-   "text": "Option 1",
    "reply": "Here are some options, not reserved yet:\n1. Dock D2, 12:00-13:00\n2. Dock D1, 13:00-14:00\n3. Dock D3, 13:00-14:00\n\nWhich option would you like?",
    "stage": "NONE",
    "false_promise": false,
@@ -542,7 +562,18 @@
   },
   {
    "scenario": "S1",
-   "thread": "S1-bf085c",
+   "thread": "S1-092048",
+   "user": "drv013",
+   "text": "Option 1",
+   "reply": "I have held Dock D2 for you from 12:00-13:00. This hold will expire in 5 minutes. Would you like to book it?",
+   "stage": "HELD",
+   "false_promise": false,
+   "duplicate": false,
+   "asks": true
+  },
+  {
+   "scenario": "S1",
+   "thread": "S1-092048",
    "user": "drv013",
    "text": "Yes, request it",
    "reply": "Requested, waiting for the warehouse. Keep your current slot until I confirm.",
@@ -553,10 +584,10 @@
   },
   {
    "scenario": "S1",
-   "thread": "S1-bf085c",
+   "thread": "S1-092048",
    "user": "drv013",
    "text": "So am I booked now?",
-   "reply": "Your request for Dock D2 at 12:00 is pending. Your previous appointment was cancelled because confirmation lapsed.",
+   "reply": "Your request for Dock D2 from 12:00-13:00 is pending confirmation from the warehouse. You are not booked yet.",
    "stage": "PENDING",
    "false_promise": false,
    "duplicate": false,
@@ -564,10 +595,10 @@
   },
   {
    "scenario": "S1",
-   "thread": "S1-bf085c",
+   "thread": "S1-092048",
    "user": "drv013",
    "text": "Is it confirmed now?",
-   "reply": "Yes, your appointment for Dock D2 at 12:00-13:00 is confirmed.",
+   "reply": "Yes, your booking for Dock D2 from 12:00-13:00 is confirmed.",
    "stage": "CONFIRMED",
    "false_promise": false,
    "duplicate": false,
@@ -575,10 +606,10 @@
   },
   {
    "scenario": "S2",
-   "thread": "S2-1389de",
+   "thread": "S2-02ed0c",
    "user": "drv001",
    "text": "Just looking, not booking yet: I'll arrive between 12:30 and 13:00. What dock slots are there after 13:00?",
-   "reply": "Your current appointment (D1 12:00-13:00) does not fit your new ETA. Here are some options after 13:00. These are not reserved yet:\n1. Dock D1, 14:00-14:50\n2. Dock D3, 14:00-14:50\n3. Dock D2, 14:00-14:50\n\nDo you want to book one of these?",
+   "reply": "Your current appointment for SHP1017 at D1 from 12:00-13:00 no longer fits.\n\nHere are some dock slot options after 13:00 (these are not reserved yet):\n1. D1 from 14:00-14:50\n2. D3 from 14:00-14:50\n3. D2 from 14:00-14:50\n\nDo any of these work for you?",
    "stage": "CONFIRMED",
    "false_promise": false,
    "duplicate": false,
@@ -586,10 +617,10 @@
   },
   {
    "scenario": "S2",
-   "thread": "S2-1389de",
+   "thread": "S2-02ed0c",
    "user": "drv001",
    "text": "How do options 1 and 2 compare?",
-   "reply": "Both options 1 and 2 are for 14:00-14:50. Option 1 is for Dock D1 and option 2 is for Dock D3.",
+   "reply": "Both options 1 and 2 are for a dock slot from 14:00-14:50. Option 1 is for Dock 1 (D1) and Option 2 is for Dock 3 (D3).",
    "stage": "CONFIRMED",
    "false_promise": false,
    "duplicate": false,
@@ -597,10 +628,10 @@
   },
   {
    "scenario": "S3",
-   "thread": "S3-9-e8cf",
+   "thread": "S3-9-ad3d",
    "user": "drv009",
    "text": "Traffic on the bypass, reaching the gate at 10:50.",
-   "reply": "Your current appointment at D4 from 11:00 to 12:00 does not fit with your new ETA of 10:50. Would you like to see other options?",
+   "reply": "Your current appointment at D4 from 11:00-12:00 no longer fits. Here are other options, not reserved yet:\n1. Dock D2, 12:00-13:15\n2. Dock D1, 13:00-14:15\n3. Dock D3, 13:00-14:15\n\nWhich option would you like?",
    "stage": "CONFIRMED",
    "false_promise": false,
    "duplicate": false,
@@ -608,10 +639,21 @@
   },
   {
    "scenario": "S5",
-   "thread": "S5-950ca9",
+   "thread": "S5-e5ac9a",
    "user": "drv004",
    "text": "I'm already in the yard with SHP1004. Any dock free now?",
-   "reply": "Your current appointment (D2 09:00-10:00) no longer fits. Here are some options, not reserved yet:\n1. Dock D2 at 10:00-11:00\n2. Dock D2 at 12:00-13:00\n3. Dock D1 at 13:00-14:00\n\nWhich option would you like?",
+   "reply": "Your current appointment (APT1004 D2 09:00-10:00) no longer fits. Here are some options, not reserved yet:\n1. D2 10:00-11:00\n2. D2 11:00-12:00\n3. D2 12:00-13:00\n\nWhich option would you like?",
+   "stage": "CONFIRMED",
+   "false_promise": false,
+   "duplicate": false,
+   "asks": true
+  },
+  {
+   "scenario": "S5",
+   "thread": "S5-e5ac9a",
+   "user": "drv004",
+   "text": "Option 1 please",
+   "reply": "Sorry, that slot was just taken. Here are the updated options, not reserved yet:\n1. D2 12:00-13:00\n2. D1 13:00-14:00\n3. D3 13:00-14:00\n\nWhich option would you like?",
    "stage": "CONFIRMED",
    "false_promise": false,
    "duplicate": false,
@@ -619,10 +661,10 @@
   },
   {
    "scenario": "S6",
-   "thread": "S6-4dbcf7",
+   "thread": "S6-d86294",
    "user": "drv015",
    "text": "Evening traffic entering Jaipur. I will reach the gate at 18:30. Need a slot for my reefer load.",
-   "reply": "Your current appointment at D5 from 17:00-18:00 no longer fits. I checked for new slots after 18:30, but there are no feasible options for a reefer load at Jaipur DC. This has been passed to a coordinator who will contact you.",
+   "reply": "Your current appointment at D5 from 17:00-18:00 no longer fits because of your new arrival time. I checked for new options after 18:30, but there are no feasible slots for your reefer load. Dock D5 has planned refrigeration power maintenance from 18:00-22:00. A coordinator will contact you to discuss this.",
    "stage": "CONFIRMED",
    "false_promise": false,
    "duplicate": false,
@@ -630,10 +672,10 @@
   },
   {
    "scenario": "X1",
-   "thread": "X1-ea4927",
+   "thread": "X1-a901d6",
    "user": "drv006",
-   "text": "Traffic after Shahpura. Reaching around 11:20. Any slot after 12? (6658)",
-   "reply": "I can't find a load with reference 6658. Do you mean ORD-260804-006 or ORD-260804-021?",
+   "text": "Traffic after Shahpura. Reaching around 11:20. Any slot after 12? (ff13)",
+   "reply": "I can't find a load with reference ff13. Is there another reference for this shipment?",
    "stage": null,
    "false_promise": false,
    "duplicate": false,
@@ -641,10 +683,10 @@
   },
   {
    "scenario": "X1",
-   "thread": "X1-ea4927",
+   "thread": "X1-a901d6",
    "user": "drv006",
-   "text": "Traffic after Shahpura. Reaching around 11:20. Any slot after 12? (6658)",
-   "reply": "I can't find a load with reference 6658. Do you mean ORD-260804-006 or ORD-260804-021?",
+   "text": "Traffic after Shahpura. Reaching around 11:20. Any slot after 12? (ff13)",
+   "reply": "I can't find a load with reference ff13. Is there another reference for this shipment?",
    "stage": null,
    "false_promise": false,
    "duplicate": true,
