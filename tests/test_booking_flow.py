@@ -192,3 +192,14 @@ def test_api_status_codes(db_url, monkeypatch):
         c = client.post(f"/bookings/{b.json()['appointment_id']}/confirm", json={"actor": "neha"})
         assert c.json()["status"] == "CONFIRMED"
         assert client.get("/facilities/FAC-JAI-01/timeline").status_code == 200
+
+
+def test_urgent_same_hour_request_is_not_dead_on_arrival(frozen):
+    # 10:00, a yard truck asks for D2 10:00 (APT1008's cancelled slot). 30-min cutoff alone = 09:30 (already past).
+    q = quote(frozen, "SHP1004")
+    h = holds.hold_option(frozen, q["quote_id"], opt_no(q, ["SLOT-JAI-017"]))
+    r = bookings.request_booking(frozen, h["hold_id"])
+    assert r["expires_at"] == "2026-08-04T10:05:00+05:30"          # 5-minute floor for the coordinator
+    assert r["appointment_id"] not in sweeper.sweep(frozen)["lapsed_requests"]   # not killed on arrival
+    set_now(frozen, "2026-08-04T10:06:00+05:30")
+    assert r["appointment_id"] in sweeper.sweep(frozen)["lapsed_requests"]

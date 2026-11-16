@@ -38,12 +38,21 @@ def claimed_slots(conn, appointment_id: str) -> list[str]:
 
 
 def pending_expiry(conn, appt: dict) -> datetime:
-    """15 min after the request, or 30 min before the slot starts, whichever is first."""
+    """15 min after the request, or 30 min before the slot starts, whichever is first; but never less than
+    MIN_CONFIRM_MIN after the request. Without that floor, a request for a slot
+    starting within 30 minutes (a yard truck wanting a dock now) was dead on arrival: the sweeper lapsed it
+    before any coordinator could see it."""
     s = get_settings()
     start = parse_ts(conn.execute("SELECT slot_start_ts FROM appointment_slots WHERE slot_id = %s",
                                   (appt["slot_id"],)).fetchone()["slot_start_ts"])
-    return min(parse_ts(appt["booked_at"]) + timedelta(minutes=s.pending_expiry_min),
-               start - timedelta(minutes=s.pending_cutoff_before_start_min))
+    booked = parse_ts(appt["booked_at"])
+    deadline = min(booked + timedelta(minutes=s.pending_expiry_min),
+                   start - timedelta(minutes=s.pending_cutoff_before_start_min))
+    # feasibility never lets a request start before "now", so request + 5 min is at most 5 min into the slot
+    return max(deadline, booked + timedelta(minutes=MIN_CONFIRM_MIN))
+
+
+MIN_CONFIRM_MIN = 5   # urgent same-hour requests: the coordinator has 5 minutes to confirm
 
 
 def _facility(conn, shipment_id: str) -> str:
