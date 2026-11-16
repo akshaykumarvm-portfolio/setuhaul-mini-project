@@ -1,0 +1,30 @@
+============================= test session starts =============================
+platform win32 -- Python 3.12.16, pytest-9.2.0, pluggy-1.7.0
+rootdir: C:\Users\aksmb\OneDrive\Documents\setuhaul
+configfile: pytest.ini
+testpaths: tests
+plugins: anyio-4.16.0, langsmith-0.14.17
+collected 72 items
+
+tests\agent\test_agent_guardrails.py ..............
+tests\feasibility\test_feasibility.py ...............
+tests\integrity\test_race.py 
+[threads] 100 rounds x 10 clients: 100 holds granted, 900 SLOT_TAKEN, 0 double holds; invariants clean
+.
+[processes] 100 rounds x 10 clients: 100 holds granted, 900 SLOT_TAKEN, 0 double holds; invariants clean
+.
+[request race] 20 rounds x 10 clients: 20 bookings, 180 ALREADY_REQUESTED; invariants clean
+.
+[db guard] direct inserts bypassing app checks: exactly 1 claim per round; invariants clean
+..
+tests\test_auth.py ...........
+tests\test_booking_flow.py ...............
+tests\test_phase1_skeleton.py ............
+
+============================== warnings summary ===============================
+tests/agent/test_agent_guardrails.py: 78 warnings
+  C:\Users\aksmb\OneDrive\Documents\setuhaul\agent\booking_client.py:31: StarletteDeprecationWarning: You should not use the 'timeout' argument with the TestClient. See https://github.com/Kludex/starlette/issues/1108 for more information.
+    r = self.http.request(method, path, json=json, params=params, headers=headers, timeout=timeout)
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+================= 72 passed, 78 warnings in 518.73s (0:08:38) =================

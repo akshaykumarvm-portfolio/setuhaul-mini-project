@@ -1,7 +1,7 @@
 # SetuHaul FDE prototype
 
 Driver delay conversations + dock re-slotting without infeasible or conflicting promises.
-**The LLM talks, code decides.** Spec: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)
+**The LLM talks, code decides.** Spec: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) · **How to test it end to end: [docs/TESTING.md](docs/TESTING.md)**
 
 ## Status
 
@@ -9,9 +9,9 @@ Driver delay conversations + dock re-slotting without infeasible or conflicting 
 | --- | --- | --- |
 | 1 | Skeleton, Postgres schema + snapshot loader, migrations, simulated clock, pinned versions | done; **deployed** (RDS + S3), see [infra/README.md](infra/README.md) |
 | 2 | Booking service: feasibility, quotes, holds, requests, confirm/reject, escalate, sweeper, integrity test | done; **deployed** on ECS/EC2; test output in [docs/evidence/phase2_test_output.txt](docs/evidence/phase2_test_output.txt) |
-| 3 | LangChain agent, intake, middleware, Redis checkpointer, LangSmith, AgentCore entrypoint | done (local); AgentCore deploy with Cognito in phase 4; output in [docs/evidence/phase3_test_output.txt](docs/evidence/phase3_test_output.txt) |
-| 4 | React driver chat + ops console, Cognito | next |
-| 5 | CP-SAT scheduler vs dispatch-rule baseline | |
+| 3 | LangChain agent, intake, middleware, Redis checkpointer, LangSmith, AgentCore entrypoint | done (local); deployed on AgentCore in phase 4; output in [docs/evidence/phase3_test_output.txt](docs/evidence/phase3_test_output.txt) |
+| 4 | React driver chat + ops console, Cognito, CloudFront, AgentCore | done; **deployed**; output in [docs/evidence/phase4_test_output.txt](docs/evidence/phase4_test_output.txt) |
+| 5 | CP-SAT scheduler vs dispatch-rule baseline | next |
 | 6 | Scripted scenario run, brief steps 1-7 | |
 
 ## Changes from the spec (agreed with the project owner)
@@ -31,10 +31,50 @@ Driver delay conversations + dock re-slotting without infeasible or conflicting 
 | A range ETA ("12:30-13:00") is LOW | A stated range is **MEDIUM**, planned on its late edge; LOW is kept for unbounded phrases ("late by an hour", a repair time) | LOW blocks holds, so a driver who gives an honest range could never book |
 | `langgraph-checkpoint-redis` | Small custom `RedisSaver` on plain keys (`agent/checkpointer.py`) | Upstash has no RediSearch/RedisJSON modules |
 | Agent writes the transcript | Intake writes it through the booking API (`/threads/...`) | The agent never touches the database |
+| Agent -> booking API with a Cognito machine-to-machine token | A service key in SSM (`X-Agent-Key`) paired with the driver id the booking service verified | Cognito M2M app clients are billed monthly; the $20 budget matters more here |
+| Browser calls AgentCore directly | Browser -> booking `/chat` -> AgentCore with the driver's own token (AgentCore validates it again) | One origin, no CORS on AgentCore, driver id verified twice |
+| `amazon-cognito-identity-js` | Cognito `InitiateAuth` called with `fetch` (USER_PASSWORD_AUTH over TLS + refresh) | The SDK is deprecated; no dependency needed |
+| Agent may hold any option it fetched | Only an option the driver has already **seen** (shown in an earlier message, same numbering) | Live test: the model fetched and held "option 1" before the driver saw the list |
 
 The 18 supplied tables keep every column exactly as supplied (timestamps stay `TEXT`, `+05:30`);
 the database uses the `C` collation so text timestamps sort exactly in time order. The only
 added column is `appointment_slots.version`.
+
+## Live architecture (phase 4)
+
+```text
+Browser (React)  --HTTPS-->  CloudFront  --/*-->      S3 (private, OAC)               React build
+                                         --/api/*-->  ECS on EC2 :8000                booking service (sole writer)
+                                                         | verifies the Cognito ID token (driver/coordinator/planner)
+                                                         | POST /chat -> AgentCore Runtime with the SAME token
+                                                         v
+                                         AgentCore Runtime (JWT inbound auth, audience = web client)
+                                                         | LangChain agent; reads secrets from SSM
+                                                         | calls the booking API via CloudFront with X-Agent-Key
+                                                         v
+                                         RDS Postgres (private)    Upstash Redis    OpenRouter    LangSmith
+```
+
+| Role | Can | Cannot |
+| --- | --- | --- |
+| driver | chat; read own loads, status, transcript | touch another driver's load (`NOT_YOURS`), see queues, confirm, move the clock |
+| coordinator | confirm/reject, hand-offs, timeline, live events, **own facility only** | other facilities, clock, reset |
+| planner | everything a coordinator can, all facilities, simulated clock, sweeper, reset demo data | chat as a driver |
+| agent (service key) | act for the driver id the booking service verified in `/chat` | anything without that driver id |
+
+The driver id comes **only** from the verified token (`custom:driver_id`); a spoofed `X-Driver-Id` or body field is
+ignored. A coordinator's confirm/reject is recorded in the audit log as `coordinator:<username>`, not the request body.
+
+### Web app (`web/`)
+
+* **Driver (phone-first)**: chat with quick replies, plus a trip card fed by the booking service (not the model):
+  load, ETA + confidence, current slot, hold countdown, pending request and its lapse time, hand-off notice, and a
+  Reported → Options → Held → Requested → Confirmed stepper. "Warehouse confirmed" appears only when the booking
+  state says CONFIRMED for the request made in this conversation.
+* **Ops console (desktop)**: dock timeline 08:00-22:00 (booked, pending, held, unloading, blocked, dock events,
+  "now" line), the confirmation queue (old slot → new slot, priority, weight, lapse countdown, Confirm/Reject),
+  hand-offs with the full record, KPIs, live updates over server-sent events (Redis pub/sub), planner clock controls
+  and **Reset demo data**.
 
 ## Conversation agent (phase 3)
 
@@ -158,7 +198,12 @@ Python **3.12**, PostgreSQL **16**.
 | bedrock-agentcore | 1.26.0 | agent (Runtime entrypoint) |
 | pytest | 9.2.0 | tests |
 | Redis server | Upstash (managed, TLS) | cache, dedupe, checkpoints, pub/sub |
-| Node / React / Vite | pinned in phase 4 | web |
+| Node | 20 LTS | web build |
+| react / react-dom | 18.3.1 | web |
+| vite | 6.4.6 | web |
+| @vitejs/plugin-react | 4.7.0 | web |
+| typescript | 5.9.3 | web |
+| PyJWT[crypto] | 2.15.1 | booking (Cognito tokens) |
 
 Exact pins: `booking/requirements.txt`, `agent/requirements.txt`, `requirements-dev.txt`.
 

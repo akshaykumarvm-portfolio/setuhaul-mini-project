@@ -120,3 +120,8 @@ def test_chat_is_driver_only_and_uses_token_identity(api, monkeypatch):
 
 def test_api_prefix_for_cloudfront(api):
     assert api.get("/api/health").json()["auth"] == "cognito"
+
+
+def test_only_planner_can_reset(api):
+    assert api.post("/admin/reset", headers=h(token(["coordinator"], facility_id="FAC-JAI-01"))).status_code == 403
+    assert api.post("/admin/reset", headers=h(token(["driver"], driver_id="DRV006"))).status_code == 403

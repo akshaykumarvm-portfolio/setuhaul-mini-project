@@ -57,6 +57,18 @@ echo "instance $IID"
 
 log "Task definition (no volumes: stateless; secrets from SSM; snapshot from S3)"
 IMAGE="$ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/$ECR_REPO:latest"
+# Phase 4: once Cognito / CloudFront / AgentCore exist, run with real auth and call the agent on AgentCore
+EXTRA_ENV=""
+EXTRA_SECRETS=""
+if [ -f "$TMPD/cognito.env" ] && [ -f "$TMPD/agentcore.env" ] && [ -f "$TMPD/web.env" ]; then
+  source "$TMPD/cognito.env"; source "$TMPD/agentcore.env"; source "$TMPD/web.env"
+  EXTRA_ENV=",{\"name\":\"AUTH_MODE\",\"value\":\"cognito\"},{\"name\":\"COGNITO_REGION\",\"value\":\"$AWS_REGION\"},
+   {\"name\":\"COGNITO_USER_POOL_ID\",\"value\":\"$COGNITO_USER_POOL_ID\"},{\"name\":\"COGNITO_CLIENT_ID\",\"value\":\"$COGNITO_CLIENT_ID\"},
+   {\"name\":\"AGENT_INVOKE_MODE\",\"value\":\"agentcore\"},{\"name\":\"AGENT_RUNTIME_ARN\",\"value\":\"$AGENT_RUNTIME_ARN\"},
+   {\"name\":\"CORS_ORIGINS\",\"value\":\"https://$WEB_DOMAIN\"}"
+  EXTRA_SECRETS=",{\"name\":\"AGENT_API_KEY\",\"valueFrom\":\"arn:aws:ssm:$AWS_REGION:$ACCOUNT_ID:parameter/$P/AGENT_API_KEY\"}"
+  echo "auth: cognito; agent: AgentCore $AGENT_RUNTIME_ID"
+fi
 cat > "$TMPD/taskdef.json" <<EOF
 {"family":"$SERVICE","networkMode":"bridge","requiresCompatibilities":["EC2"],
  "executionRoleArn":"arn:aws:iam::$ACCOUNT_ID:role/$P-task-exec-role",
@@ -66,9 +78,9 @@ cat > "$TMPD/taskdef.json" <<EOF
    "portMappings":[{"containerPort":8000,"hostPort":8000,"protocol":"tcp"}],
    "environment":[{"name":"SNAPSHOT_URI","value":"s3://$BUCKET/$SNAPSHOT_KEY"},
                   {"name":"AWS_REGION","value":"$AWS_REGION"},
-                  {"name":"SIM_START","value":"2026-08-04T10:00:00+05:30"}],
+                  {"name":"SIM_START","value":"2026-08-04T10:00:00+05:30"}$EXTRA_ENV],
    "secrets":[{"name":"DATABASE_URL","valueFrom":"arn:aws:ssm:$AWS_REGION:$ACCOUNT_ID:parameter/$P/DATABASE_URL"},
-              {"name":"REDIS_URL","valueFrom":"arn:aws:ssm:$AWS_REGION:$ACCOUNT_ID:parameter/$P/REDIS_URL"}],
+              {"name":"REDIS_URL","valueFrom":"arn:aws:ssm:$AWS_REGION:$ACCOUNT_ID:parameter/$P/REDIS_URL"}$EXTRA_SECRETS],
    "logConfiguration":{"logDriver":"awslogs","options":{"awslogs-group":"$LOG_GROUP","awslogs-region":"$AWS_REGION","awslogs-stream-prefix":"booking"}}}]}
 EOF
 TD=$(aws ecs register-task-definition --cli-input-json "file://$TMPD/taskdef.json" --query taskDefinition.taskDefinitionArn --output text)

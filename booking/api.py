@@ -182,6 +182,20 @@ def update_clock(body: ClockUpdate, conn=Depends(db), p: Principal = Who):
     return {"sim_now": clock.fmt_ts(t)}
 
 
+@app.post("/admin/reset")
+def reset_demo(p: Principal = Who):
+    """Planner only: reload the supplied snapshot (from S3 in AWS) and freeze the clock at 10:00."""
+    require_planner(p)
+    out = migrate(reset=True)
+    conn = connect()
+    try:
+        with write_tx(conn):
+            t = clock.set_clock(conn, "2026-08-04T10:00:00+05:30", rate=0)
+    finally:
+        conn.close()
+    return {"ok": True, "loaded_rows": sum((out["loaded_rows"] or {}).values()), "sim_now": clock.fmt_ts(t)}
+
+
 @app.post("/admin/sweep")
 def run_sweep(conn=Depends(db), p: Principal = Who):
     require_staff(p)

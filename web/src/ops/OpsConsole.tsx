@@ -250,6 +250,16 @@ export default function OpsConsole({ session, onSignOut }: { session: Session; o
               <button className="btn sm" disabled={busy === "clock"} onClick={() => act("sweep", () => post("/admin/sweep"))}>
                 Run sweeper
               </button>
+              <button
+                className="btn sm"
+                disabled={busy === "reset"}
+                onClick={() => {
+                  if (window.confirm("Reload the 4 Aug 2026 snapshot? All bookings, holds and hand-offs made since are erased."))
+                    act("reset", () => post("/admin/reset"));
+                }}
+              >
+                Reset demo data
+              </button>
             </div>
           </div>
         )}

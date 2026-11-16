@@ -15,3 +15,5 @@ aws ec2 wait instance-running --instance-ids "$IID"
 aws ecs update-service --cluster "$CLUSTER" --service "$SERVICE" --desired-count 1 >/dev/null
 PUB=$(aws ec2 describe-instances --instance-ids "$IID" --query 'Reservations[0].Instances[0].PublicDnsName' --output text)
 echo "Booking API: http://$PUB:8000/health  (allow 1-2 minutes for the task to start)" | tee "$TMPD/endpoint.txt"
+# The instance's public DNS changes on every start: point CloudFront's /api origin at it again
+if [ -f "$TMPD/web.env" ]; then bash "$(dirname "$0")/60_web.sh"; fi

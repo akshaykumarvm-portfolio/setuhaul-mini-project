@@ -71,9 +71,7 @@ export default function DriverApp({ session, onSignOut }: { session: Session; on
           ...m,
           {
             who: "system",
-            text: `Warehouse confirmed: ${s.current_appointment!.dock_code}, ${hhmm(s.current_appointment!.start)}–${hhmm(
-              s.current_appointment!.end,
-            )}.`,
+            text: `Warehouse confirmed: ${s.current_appointment!.dock_code} at ${hhmm(s.current_appointment!.start)}.`,
           },
         ]);
       }
