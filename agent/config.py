@@ -10,6 +10,22 @@ from dotenv import load_dotenv
 load_dotenv(Path(__file__).resolve().parents[1] / ".env")
 
 
+def load_ssm_secrets() -> None:
+    """In AgentCore, read secrets from SSM Parameter Store (/setuhaul/*) into the environment at start-up."""
+    prefix = os.getenv("SETUHAUL_SSM_PREFIX")
+    if not prefix:
+        return
+    import boto3
+    ssm = boto3.client("ssm", region_name=os.getenv("AWS_REGION", "us-east-1"))
+    names = ["OPEN_ROUTER_API_KEY", "REDIS_URL", "LANGSMITH_API_KEY", "AGENT_API_KEY"]
+    resp = ssm.get_parameters(Names=[f"{prefix}/{n}" for n in names], WithDecryption=True)
+    for prm in resp["Parameters"]:
+        os.environ.setdefault(prm["Name"].rsplit("/", 1)[-1], prm["Value"])
+
+
+load_ssm_secrets()
+
+
 @dataclass(frozen=True)
 class AgentSettings:
     booking_api_url: str
@@ -18,6 +34,7 @@ class AgentSettings:
     fallback_model: str | None
     extraction_model: str
     redis_url: str | None
+    agent_api_key: str | None = None
     checkpoint_ttl_s: int = 24 * 3600
     rate_limit_per_min: int = 20
     read_timeout_s: float = 8.0
@@ -33,4 +50,5 @@ def get_agent_settings() -> AgentSettings:
         fallback_model=os.getenv("OPEN_ROUTER_FALLBACK_MODEL") or "openai/gpt-4.1-mini",
         extraction_model=os.getenv("OPEN_ROUTER_EXTRACTION_MODEL") or model,
         redis_url=os.getenv("REDIS_URL") or None,
+        agent_api_key=os.getenv("AGENT_API_KEY") or None,
     )

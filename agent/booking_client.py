@@ -16,6 +16,8 @@ class BookingClient:
         s = get_agent_settings()
         self.s = s
         headers = {"X-Driver-Id": driver_id} if driver_id else {}
+        if s.agent_api_key:   # service identity for the booking API when it runs with AUTH_MODE=cognito
+            headers["X-Agent-Key"] = s.agent_api_key
         self.http = httpx.Client(base_url=base_url or s.booking_api_url, headers=headers, transport=transport,
                                  timeout=httpx.Timeout(s.read_timeout_s))
 

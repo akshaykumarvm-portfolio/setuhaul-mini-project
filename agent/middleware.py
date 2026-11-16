@@ -75,6 +75,10 @@ class WriteGuard(AgentMiddleware[CaseState, AgentContext]):
         if name in NEEDS_LINK and not st.get("shipment_id"):
             refuse = {"ok": False, "code": "LINK_REQUIRED",
                       "message": "No load linked yet: call get_driver_context, confirm which load, then link_shipment."}
+        elif name == "hold_option" and (not st.get("turn_sig") or st.get("quote_id") != st["turn_sig"][2]):
+            # hold only an option the driver has actually SEEN (shown in an earlier message, same numbering)
+            refuse = {"ok": False, "code": "OPTIONS_NOT_SHOWN",
+                      "message": "Show the current options to the driver first and let them pick a number."}
         elif name in ("hold_option", "request_booking") and st.get("eta_confidence") == "LOW":
             refuse = {"ok": False, "code": "ETA_UNCONFIRMED",
                       "message": "The ETA is vague. Ask the driver for the time they expect to reach the gate, then record_eta."}

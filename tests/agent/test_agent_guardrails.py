@@ -38,10 +38,12 @@ def test_post_check_blocks_false_booking_claim(make_intake, booking_api):
     intake, _ = make_intake([
         ai("", ("link_shipment", {"shipment_ref": "SHP1006"})),
         ai("", ("find_slot_options", {})),
+        ai("1. D2 12:00. Not reserved yet. Which one?"),
         ai("", ("hold_option", {"option_no": 1})),
         ai("Great news, you're booked on D2 at 12:00!"),          # a lie: it's only a hold
     ])
-    r = turn(intake, "DRV006", "book me the earliest", "T2")
+    turn(intake, "DRV006", "book me the earliest", "T2")
+    r = turn(intake, "DRV006", "option 1", "T2")
     assert "booked" not in r["reply"].lower() or "not booked" in r["reply"].lower()
     assert "holding" in r["reply"].lower() and "not booked yet" in r["reply"].lower()
 
@@ -187,3 +189,14 @@ def test_eta_resolution_rules():
     assert (r.eta_hi[11:16], r.confidence) == ("12:00", "LOW") and r.needs_question
     r = resolve_eta(DriverMessage(intent="REPORT_DELAY", arrival_time="10:30", is_repair_estimate=True), now, plan)
     assert r.confidence == "LOW" and "reach the gate" in r.needs_question
+
+
+def test_cannot_hold_options_the_driver_has_not_seen(make_intake, booking_api):
+    intake, _ = make_intake([
+        ai("", ("link_shipment", {"shipment_ref": "SHP1006"})),
+        ai("", ("find_slot_options", {})),
+        ai("", ("hold_option", {"option_no": 1})),                 # same turn: driver never saw the list
+        ai("Here are the options: 1. D2 12:00. Not reserved. Which one?"),
+    ])
+    turn(intake, "DRV006", "option 1 please", "T13")
+    assert booking_api.get("/shipments/SHP1006/status").json()["hold"] is None
