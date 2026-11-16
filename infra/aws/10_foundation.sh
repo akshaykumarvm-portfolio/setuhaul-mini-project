@@ -24,7 +24,8 @@ aws s3api put-public-access-block --bucket "$BUCKET" --public-access-block-confi
 aws s3api put-bucket-versioning --bucket "$BUCKET" --versioning-configuration Status=Enabled
 aws s3api put-bucket-encryption --bucket "$BUCKET" --server-side-encryption-configuration \
   '{"Rules":[{"ApplyServerSideEncryptionByDefault":{"SSEAlgorithm":"AES256"}}]}'
-aws s3 sync "$REPO_ROOT/data/" "s3://$BUCKET/snapshot/2026-08-04/" --only-show-errors
+# only the seed SQL (+ docs) is needed: RDS is loaded from it; the SQLite file is not uploaded
+aws s3 sync "$REPO_ROOT/data/" "s3://$BUCKET/snapshot/2026-08-04/" --exclude "*.db" --only-show-errors
 aws s3 ls "s3://$BUCKET/snapshot/2026-08-04/"
 
 log "Security groups"

@@ -32,7 +32,7 @@ re-checks feasibility under row locks.
 | Priority-policy violations | 0 | **0**: in a surge a NORMAL load cannot take a slot just shown to a CRITICAL one | S3, `tests/test_surge.py` |
 | Replies claiming booked/confirmed before CONFIRMED | 0 | **0** of 14 live replies, two consecutive runs | S1-S7, LangSmith feedback |
 | Scripted scenario checks (brief steps 1-7 + duplicates) | all | **40/40, twice** | [phase6_scenarios.md](evidence/phase6_scenarios.md) |
-| Automated tests | all | **87 + 2 = 89 pass** | [phase6_test_output.txt](evidence/phase6_test_output.txt) |
+| Automated tests | all | **93 pass** | [phase6_test_output.txt](evidence/phase6_test_output.txt) |
 | CP-SAT vs dispatch rule | justify CP | never worse; better at 6 of 9 snapshot times; tie at the 10:00 wave, so the rule is kept there | [phase5_comparison.md](evidence/phase5_comparison.md) |
 
 ## What we learned building it (each fixed and tested)
@@ -43,6 +43,11 @@ re-checks feasibility under row locks.
   option the driver hadn't seen, and asked "would you like to see options?" instead of showing them. Each is now
   enforced in code: hand-offs raised by the tool, holds only on options already shown, options rendered from the quote
   when the reply omits them, "booked" blocked unless the booking service says CONFIRMED.
+* **A provider outage must cost a question, not a promise.** An OpenRouter 429 on extraction let "late by 45 minutes"
+  through as a usable ETA; extraction now retries and falls back, and without a code-resolved window an ETA can only be
+  trusted if the driver stated a clock time.
+* **A request for a slot starting now lapsed on arrival** (its 30-min-before-start deadline was already past); every
+  request now gets at least 5 minutes for a coordinator.
 * **Records stamped after "now" must not count** on a simulated clock (a 16:25 ETA was visible at 10:00).
 * **CP-SAT needed policy, not just maths**: priority-weight every truck's lateness, make approvals a last resort, keep
   contradictory-data trucks from displacing confirmed work, and start from the baseline so it is never worse.
@@ -54,6 +59,8 @@ Cognito machine-to-machine token (cost); the browser reaches AgentCore through t
 own token (validated twice); surge priority applied synchronously (same winner as a 2-minute batch, no waiting);
 range ETAs are MEDIUM on their late edge; custom Redis checkpointer (Upstash lacks RediSearch). All listed in the
 README with reasons.
+
+Hand-ins 1-3 (problem sheet + data audit, decision register, prototype): [docs/handin/](handin/README.md).
 
 ## Not done / next
 

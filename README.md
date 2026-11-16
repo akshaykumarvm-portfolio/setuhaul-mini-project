@@ -1,7 +1,7 @@
 # SetuHaul FDE prototype
 
 Driver delay conversations + dock re-slotting without infeasible or conflicting promises.
-**The LLM talks, code decides.** Spec: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) · **How to test it end to end: [docs/TESTING.md](docs/TESTING.md)** · **Readout: [docs/READOUT.md](docs/READOUT.md)**
+**The LLM talks, code decides.** Spec: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) · **How to test it end to end: [docs/TESTING.md](docs/TESTING.md)** · **Readout: [docs/READOUT.md](docs/READOUT.md)** · **Hand-ins: [docs/handin/](docs/handin/README.md)**
 
 ## Status
 
