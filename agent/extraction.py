@@ -8,6 +8,7 @@ Confidence rules (code, not model):
 """
 from __future__ import annotations
 
+import re
 from datetime import datetime, timedelta
 from typing import Literal
 
@@ -89,10 +90,27 @@ EXTRACTION_PROMPT = (
 )
 
 
-def extract(model, text: str, last_agent_message: str | None) -> DriverMessage:
-    structured = model.with_structured_output(DriverMessage)
+def extract(model, text: str, last_agent_message: str | None, fallback=None, attempts: int = 2) -> DriverMessage:
+    """Structured extraction with a retry and an optional fallback model (rate limits happen: 429s seen live)."""
+    import time
     ctx = f"Previous assistant message: {last_agent_message}\n" if last_agent_message else ""
-    return structured.invoke([("system", EXTRACTION_PROMPT), ("human", f"{ctx}Driver's latest message: {text}")])
+    msgs = [("system", EXTRACTION_PROMPT), ("human", f"{ctx}Driver's latest message: {text}")]
+    last_err: Exception | None = None
+    for i, m in enumerate([model] * attempts + ([fallback] if fallback is not None else [])):
+        try:
+            return m.with_structured_output(DriverMessage).invoke(msgs)
+        except Exception as e:  # noqa: BLE001 - provider errors vary; retry, then fall back
+            last_err = e
+            time.sleep(0.8 * (i + 1))
+    raise last_err  # type: ignore[misc]
+
+
+EXPLICIT_TIME = re.compile(r"\b([01]?\d|2[0-3])[:.][0-5]\d\b|\b(1[0-2]|0?[1-9])\s?(am|pm)\b", re.I)
+
+
+def has_explicit_time(text: str | None) -> bool:
+    """Fail-safe used when code could not resolve a window: only a stated clock time may be trusted above LOW."""
+    return bool(text and EXPLICIT_TIME.search(text))
 
 
 def planned_eta_of(ctx_shipment: dict | None) -> datetime | None:

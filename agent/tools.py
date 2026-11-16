@@ -16,6 +16,7 @@ from langchain_core.messages import ToolMessage
 from langgraph.types import Command
 
 from agent.booking_client import BookingClient
+from agent.extraction import has_explicit_time
 from agent.timeutil import parse_ts, to_iso
 
 
@@ -96,8 +97,10 @@ def record_eta(runtime: ToolRuntime[AgentContext, CaseState], eta_lo: str | None
         return _out(runtime, {"ok": False, "code": "NO_ETA", "message": "Ask the driver what time they expect to reach the gate."})
     order = {"LOW": 0, "MEDIUM": 1, "HIGH": 2}
     conf = (confidence or hint.get("confidence") or "MEDIUM").upper()
-    # The model may not claim more certainty than code resolved; with no code-resolved window, MEDIUM at most.
-    ceiling = hint.get("confidence") or "MEDIUM"
+    # The model may not claim more certainty than code resolved. With no code-resolved window (extraction
+    # unavailable, e.g. a provider 429), fail safe: above LOW only if the driver's latest message states a clock time.
+    latest = next((m.content for m in reversed(st["messages"]) if getattr(m, "type", "") == "human"), "")
+    ceiling = hint.get("confidence") or ("MEDIUM" if has_explicit_time(str(latest)) else "LOW")
     if order.get(conf, 1) > order[ceiling]:
         conf = ceiling
     r = ctx.client.record_eta(shipment_id=st["shipment_id"], eta_lo=lo, eta_hi=hi, confidence=conf, cause=cause,

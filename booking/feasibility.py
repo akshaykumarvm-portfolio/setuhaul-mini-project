@@ -251,8 +251,8 @@ def evaluate(st: FacilityState, slot_ids: list[str], latest_finish: datetime | N
     taken_ids = {st.claimed[r["slot_id"]] for r in run if r["slot_id"] in st.claimed}
     for a_start, a_end, appt_id in st.occupied.get(dock_id, []):
         if appt_id not in taken_ids and a_start < v.end and a_end > start:
-            v.reasons.append(Reason("DOCK_OCCUPIED", f"{dock['dock_code']}: booking {appt_id} unloads until "
-                                    f"{a_end:%H:%M}, past its slot"))
+            v.reasons.append(Reason("DOCK_OCCUPIED", f"{dock['dock_code']}: booking {appt_id} occupies the dock "
+                                    f"{a_start:%H:%M}-{a_end:%H:%M}, overlapping this unload"))
     for r in run:
         if r["slot_id"] in st.claimed:
             v.reasons.append(Reason("SLOT_TAKEN", f"{r['slot_id']} is booked ({st.claimed[r['slot_id']]})"))

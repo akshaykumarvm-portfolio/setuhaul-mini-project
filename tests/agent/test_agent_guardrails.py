@@ -4,6 +4,7 @@ import uuid
 from agent.extraction import DriverMessage, resolve_eta
 from agent.timeutil import parse_ts
 from tests.agent.conftest import ai
+from agent.intake import Intake
 
 
 def turn(intake, driver, text, thread):
@@ -224,3 +225,61 @@ def test_record_eta_fetches_options_when_current_slot_no_longer_fits(make_intake
     assert "1. Dock" in r1["reply"] and r1["state"]["quote_id"]
     turn(intake, "DRV006", "option 1", "T15")
     assert booking_api.get("/shipments/SHP1006/status").json()["hold"] is not None
+
+
+def test_redis_checkpointer_keeps_every_channel_like_inmemory(client_factory, fake_redis):
+    """Regression: LangGraph passes only changed channels to put(); values set early in a turn (facts, eta_hint)
+    must survive to the next turn exactly as with LangGraph's own InMemorySaver."""
+    import fakeredis
+    from langgraph.checkpoint.memory import InMemorySaver
+
+    from agent.checkpointer import RedisSaver
+    from agent.graph import build_agent
+    from tests.agent.conftest import ScriptedModel
+
+    def script():
+        return [ai("", ("link_shipment", {"shipment_ref": "SHP1006"})), ai("What time will you reach the gate?"),
+                ai("Thanks, noted.")]
+
+    states = []
+    for saver in (InMemorySaver(), RedisSaver(fakeredis.FakeRedis())):
+        m = ScriptedModel(script=script())
+        intake = Intake(build_agent(checkpointer=saver, model=m, fallback_model=False, summarizer=m),
+                        redis_client=None, client_factory=client_factory)
+        agent = intake.agent
+        cfg = {"configurable": {"thread_id": f"CK-{type(saver).__name__}"}}
+        from agent.tools import AgentContext
+        ctx = AgentContext(driver_id="DRV006", thread_id=cfg["configurable"]["thread_id"],
+                           client=client_factory("DRV006"), sim_now="2026-08-04T10:00:00+05:30")
+        client_factory("DRV006").open_thread("DRV006", cfg["configurable"]["thread_id"])
+        agent.invoke({"messages": [("human", "late")], "facts": {"delay_minutes": 60}, "eta_hint": {"eta_lo": "2026-08-04T11:00:00+05:30", "eta_hi": "2026-08-04T11:00:00+05:30",
+                                  "confidence": "LOW", "basis": "relative delay", "needs_question": None}},
+                     config=cfg, context=ctx)
+        agent.invoke({"messages": [("human", "ok")]}, config=cfg, context=ctx)
+        v = agent.get_state(cfg).values
+        states.append({k: v.get(k) for k in ("shipment_id", "facts", "eta_hint", "clarify_count")} | {"n": len(v["messages"])})
+    assert states[0] == states[1]
+    assert states[1]["facts"] == {"delay_minutes": 60} and states[1]["shipment_id"] == "SHP1006"
+
+
+def test_extraction_outage_fails_safe(make_intake, booking_api):
+    """Live finding: an OpenRouter 429 on extraction left no code-resolved window and the model recorded a vague
+    delay at MEDIUM. Without a window, only a stated clock time may be recorded above LOW."""
+    intake, _ = make_intake([
+        ai("", ("link_shipment", {"shipment_ref": "SHP1013"})),
+        ai("", ("record_eta", {"eta_lo": "12:00", "eta_hi": "12:00", "confidence": "HIGH"})),
+        ai("Does that mean you'll reach the gate around 12:00?"),
+        ai("", ("record_eta", {"eta_lo": "11:10", "eta_hi": "11:10", "confidence": "HIGH"})),
+        ai("Noted, 11:10."),
+    ])
+    turn(intake, "DRV013", "late by one hour", "T16")              # no extraction model here: no code window at all
+    assert booking_api.get("/shipments/SHP1013/status").json()["eta"]["confidence"] == "LOW"
+    turn(intake, "DRV013", "I'll be at the gate at 11:10", "T16")
+    eta = booking_api.get("/shipments/SHP1013/status").json()["eta"]
+    assert eta["confidence"] == "MEDIUM" and eta["eta_hi"][11:16] == "11:10"
+
+
+def test_explicit_time_detector():
+    from agent.extraction import has_explicit_time
+    assert has_explicit_time("reaching the gate at 11:10") and has_explicit_time("around 6 pm") and has_explicit_time("by 18.30")
+    assert not has_explicit_time("late by 45 minutes") and not has_explicit_time("maybe an hour more")

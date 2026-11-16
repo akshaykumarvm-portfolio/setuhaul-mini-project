@@ -1,9 +1,14 @@
 """LangGraph checkpointer on plain Redis keys (works on Upstash, which has no RediSearch/RedisJSON).
 
+LangGraph hands `put` only the channels that changed in a step; unchanged channels keep their earlier
+version. So, like LangGraph's own InMemorySaver, channel values are stored per (channel, version) and a
+checkpoint is rebuilt from its `channel_versions` on read.
+
 Layout per thread (all keys expire after `ttl` seconds, refreshed on every write):
-  ckpt:{thread}:{ns}:idx              sorted set of checkpoint ids (score 0, lexicographic = time order)
-  ckpt:{thread}:{ns}:{id}             hash: checkpoint (with channel values), metadata, parent id
-  ckpt:{thread}:{ns}:{id}:writes      hash: "{task_id}|{idx}" -> pending write
+  ckpt:{thread}:{ns}:idx                  sorted set of checkpoint ids (lexicographic = time order)
+  ckpt:{thread}:{ns}:{id}                 hash: checkpoint (without values), metadata, parent id
+  ckpt:{thread}:{ns}:blobs                hash: "{channel}|{version}" -> encoded value
+  ckpt:{thread}:{ns}:{id}:writes          hash: "{task_id}|{idx}" -> pending write
 Values are encoded with the saver's serde (`dumps_typed`), so nothing is pickled by hand.
 """
 from __future__ import annotations
@@ -44,12 +49,27 @@ class RedisSaver(BaseCheckpointSaver):
         return f"{self.prefix}:{thread_id}:{ns}"
 
     # ----- read -----
+    def _values(self, base: str, versions: dict) -> dict[str, Any]:
+        if not versions:
+            return {}
+        fields = [f"{ch}|{v}".encode() for ch, v in versions.items()]
+        raw = self.r.hmget(f"{base}:blobs", fields)
+        out = {}
+        for (ch, _), val in zip(versions.items(), raw):
+            if val is None:
+                continue
+            typed = _dec(val)
+            if typed[0] != "empty":
+                out[ch] = self.serde.loads_typed(typed)
+        return out
+
     def _tuple(self, thread_id: str, ns: str, checkpoint_id: str, config: RunnableConfig | None = None) -> CheckpointTuple | None:
         base = self._base(thread_id, ns)
         h = self.r.hgetall(f"{base}:{checkpoint_id}")
         if not h:
             return None
         checkpoint = self.serde.loads_typed(_dec(h[b"c"]))
+        checkpoint = {**checkpoint, "channel_values": self._values(base, checkpoint.get("channel_versions", {}))}
         metadata = self.serde.loads_typed(_dec(h[b"m"]))
         parent = h.get(b"p", b"").decode() or None
         writes_raw = self.r.hgetall(f"{base}:{checkpoint_id}:writes")
@@ -103,15 +123,21 @@ class RedisSaver(BaseCheckpointSaver):
         ns = config["configurable"].get("checkpoint_ns", "")
         base = self._base(thread_id, ns)
         cid = checkpoint["id"]
+        c = checkpoint.copy()
+        values: dict[str, Any] = c.pop("channel_values", {})  # type: ignore[misc]
         p = self.r.pipeline(transaction=False)
+        if new_versions:
+            p.hset(f"{base}:blobs", mapping={
+                f"{ch}|{v}": _enc(self.serde.dumps_typed(values[ch]) if ch in values else ("empty", b""))
+                for ch, v in new_versions.items()})
         p.hset(f"{base}:{cid}", mapping={
-            "c": _enc(self.serde.dumps_typed(checkpoint)),
+            "c": _enc(self.serde.dumps_typed(c)),
             "m": _enc(self.serde.dumps_typed(get_checkpoint_metadata(config, metadata))),
             "p": config["configurable"].get("checkpoint_id") or "",
         })
         p.zadd(f"{base}:idx", {cid: 0})
-        p.expire(f"{base}:{cid}", self.ttl)
-        p.expire(f"{base}:idx", self.ttl)
+        for k in (f"{base}:{cid}", f"{base}:idx", f"{base}:blobs"):
+            p.expire(k, self.ttl)
         p.execute()
         return {"configurable": {"thread_id": thread_id, "checkpoint_ns": ns, "checkpoint_id": cid}}
 
@@ -135,6 +161,12 @@ class RedisSaver(BaseCheckpointSaver):
     def delete_thread(self, thread_id: str) -> None:
         for k in self.r.scan_iter(match=f"{self.prefix}:{thread_id}:*", count=200):
             self.r.delete(k)
+
+    def get_next_version(self, current: str | None, channel: None) -> str:
+        # same scheme as InMemorySaver: monotonically increasing, string-sortable
+        import random
+        current_v = 0 if current is None else (current if isinstance(current, int) else int(str(current).split(".")[0]))
+        return f"{current_v + 1:032}.{random.random():016}"
 
     # async variants delegate to the sync client (the agent runs one turn at a time per thread)
     async def aget_tuple(self, config):

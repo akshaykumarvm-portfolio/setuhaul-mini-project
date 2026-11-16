@@ -39,10 +39,11 @@ def _text(m) -> str:
 
 class Intake:
     def __init__(self, agent, *, redis_client: redis.Redis | None = None, extraction_model=None,
-                 client_factory=BookingClient):
+                 client_factory=BookingClient, extraction_fallback=None):
         self.agent = agent
         self.r = redis_client
         self.extraction_model = extraction_model
+        self.extraction_fallback = extraction_fallback
         self.client_factory = client_factory
         self.s = get_agent_settings()
 
@@ -160,7 +161,7 @@ class Intake:
         last_agent = next((_text(m) for m in reversed(prior_state.get("messages", [])) if isinstance(m, AIMessage)
                            and not m.tool_calls), None)
         try:
-            f = extract(self.extraction_model, text, last_agent)
+            f = extract(self.extraction_model, text, last_agent, fallback=self.extraction_fallback)
         except Exception:  # noqa: BLE001 - extraction is a helper; the agent still reads the raw text
             log.warning("extraction failed", exc_info=True)
             return None, None

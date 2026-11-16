@@ -385,7 +385,7 @@ def extra_duplicates(run: Run):
     run.reset("10:00")
     th = f"X1-{uuid.uuid4().hex[:6]}"
     mid = uuid.uuid4().hex
-    text = f"Traffic after Shahpura. Reaching around 11:20. Any slot after 12? ({mid[:4]})"
+    text = "Traffic after Shahpura. Reaching around 11:20. Any slot after 12?"   # THR001's text, sent twice
     r1, _, b1 = run.chat("drv006", text, th, None, message_id=mid)
     r2, _, b2 = run.chat("drv006", text, th, None, message_id=mid)
     run.check("retry with the same message id answered once, same reply", b2.get("duplicate") and r1 == r2)

@@ -35,7 +35,8 @@ def get_intake() -> Intake:
         from langgraph.checkpoint.memory import InMemorySaver
         saver = InMemorySaver()
     agent = build_agent(checkpointer=saver)
-    return Intake(agent, redis_client=redis_client, extraction_model=make_model(s.extraction_model))
+    return Intake(agent, redis_client=redis_client, extraction_model=make_model(s.extraction_model),
+                  extraction_fallback=make_model(s.fallback_model) if s.fallback_model else None)
 
 
 # ---------------- AgentCore Runtime ----------------
