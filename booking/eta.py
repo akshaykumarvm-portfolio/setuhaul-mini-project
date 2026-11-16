@@ -81,7 +81,10 @@ def effective_eta(conn, shipment_id: str, now: datetime | None = None) -> EtaWin
 
     s = conn.execute("SELECT original_eta_ts, latest_eta_ts FROM shipments WHERE shipment_id = %s",
                      (shipment_id,)).fetchone()
-    if s["latest_eta_ts"] and s["latest_eta_ts"] != s["original_eta_ts"]:
+    # latest_eta_ts has no timestamp: if it equals an update that hasn't happened yet, it is the future too
+    future = {r["declared_eta_ts"] for r in conn.execute(
+        "SELECT declared_eta_ts FROM eta_updates WHERE shipment_id = %s AND created_at > %s", (shipment_id, now_ts))}
+    if s["latest_eta_ts"] and s["latest_eta_ts"] != s["original_eta_ts"] and s["latest_eta_ts"] not in future:
         # A revised ETA on the shipment with no update row behind it: use it, at MEDIUM confidence.
         t = parse_ts(s["latest_eta_ts"])
         return EtaWindow(t, t, "MEDIUM", "SHIPMENT_RECORD")

@@ -269,6 +269,24 @@ def timeline(facility_id: str, conn=Depends(db), p: Principal = Who):
     return {"sim_now": now, "docks": docks, "slots": rows, "dock_events": events}
 
 
+@app.get("/facilities/{facility_id}/proposal")
+def facility_proposal(facility_id: str, time_limit: float = 5.0, conn=Depends(db), p: Principal = Who):
+    """Current promises vs dispatch-rule baseline vs CP-SAT for every truck still to unload. Never commits."""
+    require_staff(p)
+    check_facility(p, facility_id)
+    from booking.scheduling import propose
+    return propose(conn, facility_id, clock.now(conn), time_limit_s=min(max(time_limit, 1.0), 20.0))
+
+
+@app.get("/shipments/{shipment_id}/proposal")
+def shipment_proposal(shipment_id: str, conn=Depends(db), p: Principal = Who):
+    """One truck's line of the recommended facility plan (no other trucks' data). Never commits."""
+    if denied := forbid(conn, scope(p), shipment_id=shipment_id):
+        return denied
+    from booking.scheduling import proposal_for
+    return respond(proposal_for(conn, shipment_id, clock.now(conn)))
+
+
 @app.get("/bookings")
 def list_bookings(status: str = "PENDING_CONFIRMATION", facility_id: str | None = None, conn=Depends(db),
                   p: Principal = Who):

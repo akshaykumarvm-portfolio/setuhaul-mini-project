@@ -249,3 +249,31 @@ input, select { font: inherit; color: inherit; }
 .hof-body dd { margin: 0; }
 .checked { margin: 4px 0 8px; padding-left: 18px; font-size: 13px; }
 .checked li { margin: 2px 0; }
+
+/* facility re-plan */
+.main-col { display: grid; gap: 14px; min-width: 0; }
+.plan-meta { display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: 13px; color: var(--muted); margin-bottom: 8px; }
+.plan-meta .rec { color: var(--green); font-weight: 600; }
+table.cmp, table.trucks { width: 100%; border-collapse: collapse; font-size: 13px; }
+table.cmp th, table.cmp td, table.trucks th, table.trucks td { padding: 5px 8px; border-bottom: 1px solid var(--line); text-align: left; }
+table.cmp th { font-size: 12px; color: var(--muted); font-weight: 600; }
+table.cmp td.mono, table.cmp th:not(:first-child) { text-align: right; }
+table.cmp .is-rec { background: var(--green-bg); }
+table.cmp th.is-rec { color: var(--green); }
+table.cmp td.best { font-weight: 700; color: var(--green); }
+table.cmp td.bad { color: var(--red); font-weight: 600; }
+.why { margin: 8px 0; font-size: 13px; }
+.why summary { cursor: pointer; color: var(--muted); }
+.why ul { margin: 6px 0; padding-left: 18px; max-height: 160px; overflow-y: auto; }
+.plan-gantt { margin: 6px 0 12px; }
+.plan-gantt .tl-row { min-height: 34px; }
+.plan-bar { position: absolute; top: 5px; bottom: 5px; border-radius: 5px; padding: 0 5px; font-size: 11px; display: flex; align-items: center; overflow: hidden; white-space: nowrap; color: #fff; }
+.plan-bar.pr-critical { background: var(--red); }
+.plan-bar.pr-high { background: #c98a00; }
+.plan-bar.pr-normal { background: var(--blue); }
+.plan-bar.pr-low { background: #7d8a9a; }
+.plan-bar.moved { outline: 2px solid var(--ink); outline-offset: -2px; }
+table.trucks { margin-top: 4px; }
+table.trucks th { font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted); }
+table.trucks tr.diff td { background: var(--amber-bg); }
+.plan-panel { overflow-x: auto; }

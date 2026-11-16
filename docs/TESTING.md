@@ -76,6 +76,17 @@ Planner: clock **16:30**. Driver **drv015**: `Evening traffic, reaching the gate
 (D5: maintenance 18:00-22:00, DEVT002), the nearest out-of-policy option, routing (shift manager) and channel status
 (console first; email marked NOT_SENT, never treated as delivered). **Mark resolved** closes it. Planner: clock back to **10:00**.
 
+## 6b. Facility re-plan (CP-SAT vs dispatch rule)
+
+Sign in as **planner** (or a coordinator). Set the clock to **09:00**, then in **Facility re-plan** press **Propose
+schedule**. Expect three columns (current promises / dispatch rule / CP-SAT) on the same metrics, the recommended plan
+highlighted (CP-SAT at 09:00, with lower weighted lateness and waiting), a Gantt of that plan (outlined bars = promise
+changed, hatched = breakdown/maintenance/unloading), and a per-truck table with differences shaded. Expand **Why the
+current promises can't all hold** to see the impossible promises (21 t load on a 20 t dock, slot inside a breakdown...).
+At **10:00** the two methods tie and the dispatch rule is recommended. Nothing on the timeline changes: it is a
+proposal only. A driver can ask the assistant "what's the scheduler suggesting for me?" and gets only their own line,
+marked not reserved.
+
 ## 7. Edge cases worth one message each
 
 | Driver | Message | Expect |

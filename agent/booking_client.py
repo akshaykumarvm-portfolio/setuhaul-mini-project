@@ -46,6 +46,7 @@ class BookingClient:
     def driver_context(self, driver_id: str) -> dict: return self._call("GET", f"/drivers/{driver_id}/context")
     def status(self, shipment_id: str) -> dict: return self._call("GET", f"/shipments/{shipment_id}/status")
     def messages(self, thread_id: str) -> dict: return self._call("GET", f"/threads/{thread_id}/messages")
+    def proposal(self, shipment_id: str) -> dict: return self._call("GET", f"/shipments/{shipment_id}/proposal")
 
     # writes
     def open_thread(self, driver_id: str, thread_id: str) -> dict:

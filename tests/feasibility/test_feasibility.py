@@ -137,7 +137,8 @@ def test_quote_reserves_nothing(frozen):
 
 
 def test_shp1015_no_feasible_slot_complete_handoff_record(frozen):
-    # THR005: reefer, ETA 18:30, D5 in maintenance 18:00-22:00
+    # THR005 at 16:30: reefer, ETA 18:30 (reported 16:25), D5 in maintenance 18:00-22:00
+    set_now(frozen, "2026-08-04T16:30:00+05:30")
     opts, _ = options(frozen, "SHP1015")
     assert opts == []
     rec = build_record(frozen, "SHP1015", clock.now(frozen), reason_code="NO_FEASIBLE_SLOT")

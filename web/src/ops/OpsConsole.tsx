@@ -4,6 +4,7 @@ import { Session } from "../lib/auth";
 import { countdown, hhmm, label, secondsBetween } from "../lib/time";
 import Brand from "../components/Brand";
 import Timeline, { Dock, DockEvent, SlotRow } from "./Timeline";
+import PlanPanel from "./PlanPanel";
 
 interface Booking {
   appointment_id: string;
@@ -266,6 +267,7 @@ export default function OpsConsole({ session, onSignOut }: { session: Session; o
       </section>
 
       <main className="ops-main">
+        <div className="main-col">
         <section className="panel timeline-panel">
           <div className="panel-head">
             <h2>Dock timeline</h2>
@@ -283,6 +285,8 @@ export default function OpsConsole({ session, onSignOut }: { session: Session; o
             </div>
           )}
         </section>
+        <PlanPanel key={facility} facilityId={facility} />
+        </div>
 
         <aside className="side">
           <section className="panel">

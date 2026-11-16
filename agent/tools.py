@@ -202,13 +202,17 @@ def escalate(reason_code: str, summary: str, runtime: ToolRuntime[AgentContext, 
 
 
 @tool
-def propose_schedule(facility_id: str, runtime: ToolRuntime[AgentContext, CaseState]) -> Command:
-    """Facility-level schedule proposal (CP-SAT). Read-only, never commits. Available from phase 5."""
-    return _out(runtime, {"ok": False, "code": "NOT_AVAILABLE_YET", "message": "Scheduler arrives in phase 5."})
+def propose_schedule(runtime: ToolRuntime[AgentContext, CaseState]) -> Command:
+    """Where the facility-wide scheduler (CP-SAT vs dispatch rule) would place the linked load, considering every
+    truck. Read-only and NOT reserved; use only to explain what is likely, then book via find_slot_options."""
+    st, ctx = runtime.state, runtime.context
+    if not st.get("shipment_id"):
+        return _out(runtime, {"ok": False, "code": "LINK_REQUIRED", "message": "Link the load first."})
+    return _out(runtime, ctx.client.proposal(st["shipment_id"]))
 
 
 TOOLS = [get_driver_context, link_shipment, record_eta, find_slot_options, hold_option, request_booking,
          get_booking_status, release_hold, escalate, propose_schedule]
 WRITE_TOOLS = {"link_shipment", "record_eta", "hold_option", "request_booking", "release_hold", "escalate"}
 NEEDS_LINK = {"record_eta", "find_slot_options", "hold_option", "request_booking", "get_booking_status", "release_hold",
-              "escalate"}
+              "escalate", "propose_schedule"}

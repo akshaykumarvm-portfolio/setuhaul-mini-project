@@ -11,8 +11,8 @@ Driver delay conversations + dock re-slotting without infeasible or conflicting 
 | 2 | Booking service: feasibility, quotes, holds, requests, confirm/reject, escalate, sweeper, integrity test | done; **deployed** on ECS/EC2; test output in [docs/evidence/phase2_test_output.txt](docs/evidence/phase2_test_output.txt) |
 | 3 | LangChain agent, intake, middleware, Redis checkpointer, LangSmith, AgentCore entrypoint | done (local); deployed on AgentCore in phase 4; output in [docs/evidence/phase3_test_output.txt](docs/evidence/phase3_test_output.txt) |
 | 4 | React driver chat + ops console, Cognito, CloudFront, AgentCore | done; **deployed**; output in [docs/evidence/phase4_test_output.txt](docs/evidence/phase4_test_output.txt) |
-| 5 | CP-SAT scheduler vs dispatch-rule baseline | next |
-| 6 | Scripted scenario run, brief steps 1-7 | |
+| 5 | CP-SAT scheduler vs dispatch-rule baseline | done; comparison in [docs/evidence/phase5_comparison.md](docs/evidence/phase5_comparison.md), tests in [docs/evidence/phase5_test_output.txt](docs/evidence/phase5_test_output.txt) |
+| 6 | Scripted scenario run, brief steps 1-7 | next |
 
 ## Changes from the spec (agreed with the project owner)
 
@@ -34,11 +34,33 @@ Driver delay conversations + dock re-slotting without infeasible or conflicting 
 | Agent -> booking API with a Cognito machine-to-machine token | A service key in SSM (`X-Agent-Key`) paired with the driver id the booking service verified | Cognito M2M app clients are billed monthly; the $20 budget matters more here |
 | Browser calls AgentCore directly | Browser -> booking `/chat` -> AgentCore with the driver's own token (AgentCore validates it again) | One origin, no CORS on AgentCore, driver id verified twice |
 | `amazon-cognito-identity-js` | Cognito `InitiateAuth` called with `fetch` (USER_PASSWORD_AUTH over TLS + refresh) | The SDK is deprecated; no dependency needed |
+| Scheduler weights waiting the same for every truck | Lateness is priority-weighted for **every** truck (due = promise, or earliest start if none) | First run pushed a HIGH truck 90 min back to favour a NORMAL one |
+| CP-SAT run cold | CP-SAT starts from the baseline as a solution hint | Cold, it was once worse than the rule within 5 s; a proposal tool must never be worse |
 | Agent may hold any option it fetched | Only an option the driver has already **seen** (shown in an earlier message, same numbering) | Live test: the model fetched and held "option 1" before the driver saw the list |
 
 The 18 supplied tables keep every column exactly as supplied (timestamps stay `TEXT`, `+05:30`);
 the database uses the `C` collation so text timestamps sort exactly in time order. The only
 added column is `appointment_slots.version`.
+
+## Facility scheduler (phase 5)
+
+`booking/scheduling/`: re-sequences **every** truck still to unload at a facility from structured state only. Read-only:
+proposals never book; any change still goes through hold -> request -> coordinator confirm.
+
+| Piece | What it does |
+| --- | --- |
+| `problem.py` | Truck = job, dock = machine; release = ETA window late edge + 15 min (or gate-in); processing = unload minutes; due = current promise (or release if none); fixed = trucks still unloading, dock events, blocked slots; frozen horizon = confirmed slots in the next 60 min the truck can still make (and no dock event over them) |
+| `dispatch_rule.py` | Baseline: priority, then earliest release; earliest compatible slot; approval-free docks first; tightest weight fit |
+| `cpsat.py` | OR-Tools CP-SAT: optional fixed-size intervals per (truck, compatible dock), starts only at open slot starts, `AddNoOverlap` per dock incl. merged fixed blocks, "unscheduled" escape (hand-off) instead of infeasibility, hinted with the baseline so it is never worse, 5 s cap |
+| `evaluate.py` | One validator for every plan (dock type/weight, release, slot starts, fixed blocks, overlaps) and one scorer: weighted lateness, waiting, promises changed, unscheduled, approvals, utilisation, and the shared objective |
+| API / UI / agent | `GET /facilities/{id}/proposal` (staff) feeds the console's **Facility re-plan** panel (three plans side by side, Gantt of the recommended plan, per-truck diff); `GET /shipments/{id}/proposal` gives a driver only their own truck's line; the agent's `propose_schedule` tool uses it and must say "not reserved" |
+
+Objective (Decision 8): `100 * priority_weight * lateness_vs_due + waiting + 30 * promise_changed`, plus 10,000 for a
+start after 21:00 or a standard load on the heavy dock (approval, last resort) and 100,000 x weight for no slot.
+Trucks with contradictory data (A8) count at weight 1 so they never displace confirmed work.
+**Result**: CP-SAT is never worse than the rule and strictly better at 6 of 9 snapshot times (09:00: weighted
+lateness -12%, waiting -21%, proven optimal in 0.1 s); at 10:00 they tie, so the rule is recommended. CLI:
+`python -m booking.scheduling --at 10:00 --sweep 09:00,10:00,11:00`.
 
 ## Live architecture (phase 4)
 
