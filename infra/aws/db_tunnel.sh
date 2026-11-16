@@ -8,6 +8,9 @@
 set -euo pipefail
 source "$(dirname "$0")/env.sh"
 LOCAL_PORT="${LOCAL_PORT:-15432}"
+# a terminal opened before the plugin was installed won't have it on PATH yet
+[ -d "/c/Program Files/Amazon/SessionManagerPlugin/bin" ] && export PATH="/c/Program Files/Amazon/SessionManagerPlugin/bin:$PATH"
+command -v session-manager-plugin >/dev/null || { echo "Session Manager plugin not found: install it, then open a new terminal"; exit 1; }
 
 IID=$(aws ec2 describe-instances --filters Name=tag:Name,Values="$P-ecs" Name=instance-state-name,Values=running \
       --query 'Reservations[0].Instances[0].InstanceId' --output text)
@@ -16,13 +19,13 @@ EP=$(aws rds describe-db-instances --db-instance-identifier "$DB_ID" --query 'DB
 
 cat <<EOF
 
-  Tunnel: localhost:$LOCAL_PORT  ->  $IID  ->  $EP:5432
+  Tunnel: 127.0.0.1:$LOCAL_PORT  ->  $IID  ->  $EP:5432   (use 127.0.0.1, not "localhost": the tunnel is IPv4-only)
   Database: setuhaul    User: setuhaul_admin    SSL: require
   Password: MSYS_NO_PATHCONV=1 aws ssm get-parameter --name /$P/DB_PASSWORD --with-decryption --query Parameter.Value --output text
 
   psql (in the setuhaul conda env):
-    psql "host=localhost port=$LOCAL_PORT dbname=setuhaul user=setuhaul_admin sslmode=require"
-  GUI (DBeaver / pgAdmin / VS Code): host localhost, port $LOCAL_PORT, same user, password and SSL.
+    psql "host=127.0.0.1 port=$LOCAL_PORT dbname=setuhaul user=setuhaul_admin sslmode=require"
+  GUI (DBeaver / pgAdmin / VS Code): host 127.0.0.1, port $LOCAL_PORT, same user, password and SSL.
 
 EOF
 aws ssm start-session --target "$IID" --document-name AWS-StartPortForwardingSessionToRemoteHost \
